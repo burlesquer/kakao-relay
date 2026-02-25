@@ -9,10 +9,10 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/audit"
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/service"
-	"github.com/openclaw/relay-server-go/internal/sse"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/audit"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
 )
 
 type Command struct {

@@ -6,7 +6,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/openclaw/relay-server-go/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
 )
 
 type IPRateLimitMiddleware struct {

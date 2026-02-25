@@ -10,9 +10,9 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openclaw/relay-server-go/internal/middleware"
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/sse"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/middleware"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
 )
 
 // Helper to add session to context

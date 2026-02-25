@@ -14,15 +14,15 @@ import (
 	"github.com/rs/zerolog"
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/config"
-	"github.com/openclaw/relay-server-go/internal/database"
-	"github.com/openclaw/relay-server-go/internal/handler"
-	"github.com/openclaw/relay-server-go/internal/jobs"
-	"github.com/openclaw/relay-server-go/internal/middleware"
-	"github.com/openclaw/relay-server-go/internal/redis"
-	"github.com/openclaw/relay-server-go/internal/repository"
-	"github.com/openclaw/relay-server-go/internal/service"
-	"github.com/openclaw/relay-server-go/internal/sse"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/config"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/database"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/handler"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/jobs"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/middleware"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/redis"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
 )
 
 func main() {

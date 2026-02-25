@@ -8,11 +8,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	apperrors "github.com/openclaw/relay-server-go/internal/errors"
-	"github.com/openclaw/relay-server-go/internal/httputil"
-	"github.com/openclaw/relay-server-go/internal/middleware"
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/service"
+	apperrors "gitlab.tepseg.com/ai/kakao-relay/internal/errors"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/httputil"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/middleware"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
 )
 
 type OpenClawHandler struct {

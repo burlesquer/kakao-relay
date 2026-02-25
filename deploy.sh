@@ -2,7 +2,7 @@
 set -e
 
 # Configuration - All values MUST be set via environment variables
-SERVICE_NAME="${SERVICE_NAME:-kakao-talkchannel-relay}"
+SERVICE_NAME="${SERVICE_NAME:-kakao-relay}"
 REGION="${REGION:?REGION is required}"
 PROJECT_ID="${PROJECT_ID:?PROJECT_ID is required}"
 CLOUD_SQL_INSTANCE="${CLOUD_SQL_INSTANCE:?CLOUD_SQL_INSTANCE is required}"

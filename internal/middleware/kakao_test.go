@@ -8,7 +8,7 @@ import (
 
 	"github.com/stretchr/testify/assert"
 
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 func TestKakaoSignatureMiddleware(t *testing.T) {

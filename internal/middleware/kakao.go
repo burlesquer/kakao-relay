@@ -9,7 +9,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 const KakaoBodyContextKey contextKey = "kakaoBody"

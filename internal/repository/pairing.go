@@ -6,7 +6,7 @@ import (
 
 	"github.com/jmoiron/sqlx"
 
-	"github.com/openclaw/relay-server-go/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
 )
 
 type PairingCodeRepository interface {

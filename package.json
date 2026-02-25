@@ -1,5 +1,5 @@
 {
-  "name": "talkchannel-relay-server",
+  "name": "kakao-relay",
   "version": "0.1.0",
   "description": "카카오톡 채널 webhook relay server for OpenClaw",
   "module": "src/index.ts",

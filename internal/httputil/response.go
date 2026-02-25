@@ -4,7 +4,7 @@ import (
 	"encoding/json"
 	"net/http"
 
-	apperrors "github.com/openclaw/relay-server-go/internal/errors"
+	apperrors "gitlab.tepseg.com/ai/kakao-relay/internal/errors"
 )
 
 func WriteJSON(w http.ResponseWriter, status int, data any) {

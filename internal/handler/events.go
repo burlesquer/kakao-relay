@@ -9,9 +9,9 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/middleware"
-	"github.com/openclaw/relay-server-go/internal/service"
-	"github.com/openclaw/relay-server-go/internal/sse"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/middleware"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
 )
 
 type EventsHandler struct {

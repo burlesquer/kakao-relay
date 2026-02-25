@@ -7,8 +7,8 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/repository"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
 )
 
 type ConversationService struct {

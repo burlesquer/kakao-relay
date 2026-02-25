@@ -6,8 +6,8 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/service"
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 type SessionHandler struct {

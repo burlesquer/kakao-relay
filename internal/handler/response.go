@@ -5,8 +5,8 @@ import (
 	"strconv"
 	"time"
 
-	"github.com/openclaw/relay-server-go/internal/httputil"
-	"github.com/openclaw/relay-server-go/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/httputil"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
 )
 
 func writeJSON(w http.ResponseWriter, status int, data any) {

@@ -9,7 +9,7 @@ import (
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 
-	"github.com/openclaw/relay-server-go/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
 )
 
 // Mock inbound repository

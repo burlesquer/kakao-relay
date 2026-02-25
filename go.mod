@@ -1,4 +1,4 @@
-module github.com/openclaw/relay-server-go
+module gitlab.tepseg.com/ai/kakao-relay
 
 go 1.25.0
 

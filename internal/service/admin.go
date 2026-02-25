@@ -9,9 +9,9 @@ import (
 	"github.com/jmoiron/sqlx"
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/repository"
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 type queryBuilder struct {

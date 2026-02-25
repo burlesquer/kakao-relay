@@ -14,10 +14,10 @@ import (
 	"github.com/redis/go-redis/v9"
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/repository"
-	redisclient "github.com/openclaw/relay-server-go/internal/redis"
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
+	redisclient "gitlab.tepseg.com/ai/kakao-relay/internal/redis"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 const (

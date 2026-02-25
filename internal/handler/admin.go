@@ -7,11 +7,11 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/audit"
-	"github.com/openclaw/relay-server-go/internal/middleware"
-	"github.com/openclaw/relay-server-go/internal/model"
-	"github.com/openclaw/relay-server-go/internal/service"
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/audit"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/middleware"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 type AdminHandler struct {

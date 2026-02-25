@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	redisclient "github.com/openclaw/relay-server-go/internal/redis"
+	redisclient "gitlab.tepseg.com/ai/kakao-relay/internal/redis"
 )
 
 const (

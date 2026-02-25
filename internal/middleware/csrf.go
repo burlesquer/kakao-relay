@@ -3,7 +3,7 @@ package middleware
 import (
 	"net/http"
 
-	"github.com/openclaw/relay-server-go/internal/util"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/util"
 )
 
 const (

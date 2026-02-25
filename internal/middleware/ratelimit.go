@@ -8,7 +8,7 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"github.com/openclaw/relay-server-go/internal/config"
+	"gitlab.tepseg.com/ai/kakao-relay/internal/config"
 )
 
 const (
