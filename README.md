@@ -70,7 +70,7 @@ go run ./cmd/server
 - `deploy.sh`: Cloud Run 배포 스크립트 (프로젝트/리전 값 확인 필요)
 
 ## 관련 프로젝트
-- [openclaw-kakao-talkchannel-plugin](https://github.com/kakao-bart-lee/openclaw-kakao-talkchannel-plugin): OpenClaw 카카오톡 채널 플러그인 — SSE 연결, 메시지 폴링/응답, 페어링을 자동 처리. OpenClaw에 플러그인 설치 후 `relayUrl`과 `relayToken`을 설정하면 바로 연동됩니다.
+- [openclaw-kakao-talkchannel-plugin](http://gitlab.tepseg.com:8087/ai/openclaw-kakao.git): OpenClaw 카카오톡 채널 플러그인 — SSE 연결, 메시지 폴링/응답, 페어링을 자동 처리. OpenClaw에 플러그인 설치 후 `relayUrl`과 `relayToken`을 설정하면 바로 연동됩니다.
 
 ## 문서
 - `docs/setup-guide.md`: **설정 가이드** (카카오 채널 + 오픈빌더 + 릴레이 서버 전체 설정)

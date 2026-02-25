@@ -173,11 +173,7 @@ func main() {
 	r.Route("/portal", func(r chi.Router) {
 		r.Use(securityHeadersMiddleware.Handler)
 		r.Use(csrfMiddleware.Handler)
-		r.Mount("/", portalHandler.PublicRoutes())
-		r.Group(func(r chi.Router) {
-			r.Use(portalSessionMiddleware.Handler)
-			r.Mount("/", portalHandler.AuthenticatedRoutes())
-		})
+		r.Mount("/", portalHandler.Routes(portalSessionMiddleware.Handler))
 		r.NotFound(handler.StaticFileServer("static/portal", "/portal").ServeHTTP)
 	})
 

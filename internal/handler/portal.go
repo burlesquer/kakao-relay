@@ -46,31 +46,30 @@ func NewPortalHandler(
 	}
 }
 
-func (h *PortalHandler) PublicRoutes() chi.Router {
+func (h *PortalHandler) Routes(sessionMiddleware func(http.Handler) http.Handler) chi.Router {
 	r := chi.NewRouter()
 
+	// Public routes
 	r.Get("/api/stats/public", h.GetPublicStats)
 	r.Post("/api/auth/code", h.LoginWithCode)
 	r.Get("/api/code/stats", h.GetCodeStats)
 	r.Get("/api/code/messages", h.GetCodeMessages)
 
-	return r
-}
-
-func (h *PortalHandler) AuthenticatedRoutes() chi.Router {
-	r := chi.NewRouter()
-
-	r.Post("/api/logout", h.Logout)
-	r.Get("/api/me", h.Me)
-	r.Get("/api/stats", h.GetStats)
-	r.Post("/api/pairing/generate", h.GeneratePairingCode)
-	r.Get("/api/connections", h.ListConnections)
-	r.Post("/api/connections/{conversationKey}/unpair", h.UnpairConnection)
-	r.Patch("/api/connections/{conversationKey}/block", h.BlockConnection)
-	r.Get("/api/token", h.GetToken)
-	r.Post("/api/token/regenerate", h.RegenerateToken)
-	r.Delete("/api/account", h.DeleteAccount)
-	r.Get("/api/messages", h.GetMessages)
+	// Authenticated routes
+	r.Group(func(r chi.Router) {
+		r.Use(sessionMiddleware)
+		r.Post("/api/logout", h.Logout)
+		r.Get("/api/me", h.Me)
+		r.Get("/api/stats", h.GetStats)
+		r.Post("/api/pairing/generate", h.GeneratePairingCode)
+		r.Get("/api/connections", h.ListConnections)
+		r.Post("/api/connections/{conversationKey}/unpair", h.UnpairConnection)
+		r.Patch("/api/connections/{conversationKey}/block", h.BlockConnection)
+		r.Get("/api/token", h.GetToken)
+		r.Post("/api/token/regenerate", h.RegenerateToken)
+		r.Delete("/api/account", h.DeleteAccount)
+		r.Get("/api/messages", h.GetMessages)
+	})
 
 	return r
 }

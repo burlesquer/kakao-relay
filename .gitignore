@@ -23,6 +23,8 @@ bun.lock
 # Claude/Sisyphus internal
 .claude/
 .sisyphus/
+.omc/
+.mcp.json
 
 # Logs
 *.log

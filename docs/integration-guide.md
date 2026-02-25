@@ -74,7 +74,7 @@ curl -X POST https://kakao-talkchannel-relay-....run.app/admin/api/accounts \
 
 #### 2-1. OpenClaw 플러그인 사용 (권장)
 
-[openclaw-kakao-talkchannel-plugin](https://github.com/kakao-bart-lee/openclaw-kakao-talkchannel-plugin)을 설치하면 SSE 연결, 메시지 폴링, 응답 전송, 페어링 등이 자동 처리됩니다.
+[openclaw-kakao-talkchannel-plugin](http://gitlab.tepseg.com:8087/ai/openclaw-kakao.git)을 설치하면 SSE 연결, 메시지 폴링, 응답 전송, 페어링 등이 자동 처리됩니다.
 
 ```bash
 openclaw plugins install @openclaw/kakao-talkchannel
