@@ -32,7 +32,6 @@ func TestLoad(t *testing.T) {
 		"DATABASE_URL":          os.Getenv("DATABASE_URL"),
 		"REDIS_URL":             os.Getenv("REDIS_URL"),
 		"KAKAO_SIGNATURE_SECRET": os.Getenv("KAKAO_SIGNATURE_SECRET"),
-		"ADMIN_PASSWORD_HASH":   os.Getenv("ADMIN_PASSWORD_HASH"),
 		"QUEUE_TTL_SECONDS":     os.Getenv("QUEUE_TTL_SECONDS"),
 		"CALLBACK_TTL_SECONDS":  os.Getenv("CALLBACK_TTL_SECONDS"),
 		"LOG_LEVEL":             os.Getenv("LOG_LEVEL"),

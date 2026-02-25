@@ -14,6 +14,7 @@ RUN go mod download
 # Copy source code
 COPY cmd/ ./cmd/
 COPY internal/ ./internal/
+COPY web/ ./web/
 
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o server ./cmd/server
@@ -27,9 +28,6 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /app/server .
-
-# Copy static files (from public/ to static/)
-COPY public/ ./static/
 
 # Create non-root user
 RUN adduser -D -g '' appuser

@@ -3,6 +3,7 @@ package repository
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"time"
 
 	"github.com/jmoiron/sqlx"
@@ -20,6 +21,10 @@ type SessionRepository interface {
 	MarkDisconnected(ctx context.Context, id string) error
 	DeleteExpired(ctx context.Context) (int64, error)
 	CountPendingByIP(ctx context.Context, ip string, since time.Time) (int, error)
+	FindRecent(ctx context.Context, limit int) ([]model.Session, error)
+	CountByStatus(ctx context.Context, status model.SessionStatus) (int, error)
+	UpdateMetadata(ctx context.Context, id string, metadata json.RawMessage) error
+	Delete(ctx context.Context, id string) error
 	// WithTx returns a new repository that uses the given transaction
 	WithTx(tx *sqlx.Tx) SessionRepository
 }
@@ -135,4 +140,38 @@ func (r *sessionRepo) CountPendingByIP(ctx context.Context, ip string, since tim
 	// Note: This requires storing IP in metadata when creating session
 	// For now, return 0 to not block (rate limiting can be added later)
 	return 0, nil
+}
+
+func (r *sessionRepo) FindRecent(ctx context.Context, limit int) ([]model.Session, error) {
+	var sessions []model.Session
+	err := r.db.SelectContext(ctx, &sessions, `
+		SELECT * FROM sessions
+		ORDER BY created_at DESC
+		LIMIT $1
+	`, limit)
+	if err != nil {
+		return nil, err
+	}
+	return sessions, nil
+}
+
+func (r *sessionRepo) CountByStatus(ctx context.Context, status model.SessionStatus) (int, error) {
+	var count int
+	err := r.db.GetContext(ctx, &count, `
+		SELECT COUNT(*) FROM sessions WHERE status = $1
+	`, status)
+	return count, err
+}
+
+func (r *sessionRepo) UpdateMetadata(ctx context.Context, id string, metadata json.RawMessage) error {
+	_, err := r.db.ExecContext(ctx, `
+		UPDATE sessions SET metadata = $2, updated_at = NOW()
+		WHERE id = $1
+	`, id, metadata)
+	return err
+}
+
+func (r *sessionRepo) Delete(ctx context.Context, id string) error {
+	_, err := r.db.ExecContext(ctx, `DELETE FROM sessions WHERE id = $1`, id)
+	return err
 }

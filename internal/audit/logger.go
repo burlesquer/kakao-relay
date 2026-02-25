@@ -12,20 +12,11 @@ import (
 type EventType string
 
 const (
-	EventLoginSuccess    EventType = "login_success"
-	EventLoginFailure    EventType = "login_failure"
-	EventLogout          EventType = "logout"
 	EventTokenRegenerate EventType = "token_regenerate"
 	EventAccountCreate   EventType = "account_create"
-	EventAccountDelete   EventType = "account_delete"
-	EventUserDelete      EventType = "user_delete"
 	EventRateLimitExceed EventType = "rate_limit_exceeded"
-	EventCSRFFailure     EventType = "csrf_failure"
 	EventAuthFailure     EventType = "auth_failure"
 	EventSessionCreate   EventType = "session_create"
-	EventSessionDelete   EventType = "session_delete"
-	EventCodeGenerate    EventType = "code_generate"
-	EventCodeLogin       EventType = "code_login"
 )
 
 type Event struct {

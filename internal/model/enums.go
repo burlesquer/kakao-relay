@@ -1,12 +1,5 @@
 package model
 
-type AccountMode string
-
-const (
-	AccountModeDirect AccountMode = "direct"
-	AccountModeRelay  AccountMode = "relay"
-)
-
 type PairingState string
 
 const (

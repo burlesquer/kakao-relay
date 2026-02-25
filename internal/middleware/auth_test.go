@@ -2,6 +2,7 @@ package middleware
 
 import (
 	"context"
+	"encoding/json"
 	"errors"
 	"net/http"
 	"net/http/httptest"
@@ -79,6 +80,22 @@ func (m *mockSessionRepo) MarkDisconnected(ctx context.Context, id string) error
 	return nil
 }
 
+func (m *mockSessionRepo) FindRecent(ctx context.Context, limit int) ([]model.Session, error) {
+	return nil, nil
+}
+
+func (m *mockSessionRepo) CountByStatus(ctx context.Context, status model.SessionStatus) (int, error) {
+	return 0, nil
+}
+
+func (m *mockSessionRepo) UpdateMetadata(ctx context.Context, id string, metadata json.RawMessage) error {
+	return nil
+}
+
+func (m *mockSessionRepo) Delete(ctx context.Context, id string) error {
+	return nil
+}
+
 func (m *mockSessionRepo) WithTx(tx *sqlx.Tx) repository.SessionRepository {
 	return m
 }
@@ -114,7 +131,6 @@ func (m *mockAccountRepo) WithTx(tx *sqlx.Tx) repository.AccountRepository {
 func TestAuthMiddleware(t *testing.T) {
 	testAccount := &model.Account{
 		ID:              "acc-123",
-		Mode:            model.AccountModeRelay,
 		RateLimitPerMin: 60,
 	}
 	accountID := "acc-123"

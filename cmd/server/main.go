@@ -23,6 +23,7 @@ import (
 	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
+	"gitlab.tepseg.com/ai/kakao-relay/web"
 )
 
 func main() {
@@ -63,11 +64,6 @@ func main() {
 
 	accountRepo := repository.NewAccountRepository(db.DB)
 	convRepo := repository.NewConversationRepository(db.DB)
-	pairingCodeRepo := repository.NewPairingCodeRepository(db.DB)
-	portalAccessCodeRepo := repository.NewPortalAccessCodeRepository(db.DB)
-	portalUserRepo := repository.NewPortalUserRepository(db.DB)
-	portalSessionRepo := repository.NewPortalSessionRepository(db.DB)
-	adminSessionRepo := repository.NewAdminSessionRepository(db.DB)
 	inboundMsgRepo := repository.NewInboundMessageRepository(db.DB)
 	outboundMsgRepo := repository.NewOutboundMessageRepository(db.DB)
 	sessionRepo := repository.NewSessionRepository(db.DB)
@@ -76,48 +72,32 @@ func main() {
 	defer broker.Close()
 
 	convService := service.NewConversationService(convRepo)
-	pairingService := service.NewPairingService(pairingCodeRepo, convRepo)
-	portalAccessService := service.NewPortalAccessService(portalAccessCodeRepo, convRepo, redisClient)
 	messageService := service.NewMessageService(inboundMsgRepo, outboundMsgRepo)
 	kakaoService := service.NewKakaoService()
-	adminService := service.NewAdminService(
-		db.DB, adminSessionRepo, accountRepo, convRepo,
-		inboundMsgRepo, outboundMsgRepo, portalUserRepo, sessionRepo,
-		cfg.AdminPasswordHash, cfg.AdminSessionSecret,
-	)
-	portalService := service.NewPortalService(
-		portalUserRepo, portalSessionRepo, accountRepo,
-		cfg.PortalSessionSecret,
-	)
 	sessionService := service.NewSessionService(db, sessionRepo, accountRepo, broker)
 	ipRateLimiter := service.NewRateLimiter(redisClient.Client)
 
 	authMiddleware := middleware.NewAuthMiddleware(accountRepo, sessionRepo)
 	rateLimitMiddleware := middleware.NewRedisRateLimitMiddleware(redisClient.Client)
-	adminSessionMiddleware := middleware.NewAdminSessionMiddleware(
-		adminSessionRepo, cfg.AdminPasswordHash, cfg.AdminSessionSecret,
-	)
 	kakaoSignatureMiddleware := middleware.NewKakaoSignatureMiddleware(cfg.KakaoSignatureSecret)
-	portalSessionMiddleware := middleware.NewPortalSessionMiddleware(
-		portalSessionRepo, portalUserRepo, cfg.PortalSessionSecret,
-	)
 	sessionCreateRateLimit := middleware.NewIPRateLimitMiddleware(ipRateLimiter, 10, 5*time.Minute, "session_create")
 	sessionStatusRateLimit := middleware.NewIPRateLimitMiddleware(ipRateLimiter, 30, 1*time.Minute, "session_status")
-
-	csrfMiddleware := middleware.NewCSRFMiddleware(isProduction)
 	bodyLimitMiddleware := middleware.NewBodyLimitMiddleware(0)
-	securityHeadersMiddleware := middleware.NewSecurityHeadersMiddleware(isProduction)
 
 	kakaoHandler := handler.NewKakaoHandler(
-		convService, sessionService, messageService, portalAccessService, broker, cfg.CallbackTTL(), cfg.PortalBaseURL,
+		convService, sessionService, messageService, broker, cfg.CallbackTTL(),
 	)
 	eventsHandler := handler.NewEventsHandler(broker, messageService)
 	openclawHandler := handler.NewOpenClawHandler(messageService, kakaoService)
-	adminHandler := handler.NewAdminHandler(adminService, adminSessionMiddleware.Handler, isProduction)
-	portalHandler := handler.NewPortalHandler(
-		portalService, pairingService, portalAccessService, convService, messageService, adminService, isProduction,
-	)
 	sessionHandler := handler.NewSessionHandler(sessionService)
+
+	dashboardRepo := repository.NewDashboardRepository(db.DB)
+	dashboardHandler := handler.NewDashboardHandler(
+		dashboardRepo, accountRepo, convRepo,
+		inboundMsgRepo, outboundMsgRepo,
+		sessionService, messageService, broker,
+		web.DashboardHTML,
+	)
 
 	r := chi.NewRouter()
 
@@ -135,10 +115,6 @@ func main() {
 			"status":    "ok",
 			"timestamp": time.Now().UnixMilli(),
 		})
-	})
-
-	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
-		http.Redirect(w, r, "/portal/", http.StatusFound)
 	})
 
 	r.Route("/kakao-talkchannel", func(r chi.Router) {
@@ -163,23 +139,27 @@ func main() {
 		r.With(sessionStatusRateLimit.Handler).Get("/{sessionToken}/status", sessionHandler.GetSessionStatus)
 	})
 
-	r.Route("/admin", func(r chi.Router) {
-		r.Use(securityHeadersMiddleware.Handler)
-		r.Use(csrfMiddleware.Handler)
-		r.Mount("/", adminHandler.Routes())
-		r.NotFound(handler.StaticFileServer("static/admin", "/admin").ServeHTTP)
-	})
-
-	r.Route("/portal", func(r chi.Router) {
-		r.Use(securityHeadersMiddleware.Handler)
-		r.Use(csrfMiddleware.Handler)
-		r.Mount("/", portalHandler.Routes(portalSessionMiddleware.Handler))
-		r.NotFound(handler.StaticFileServer("static/portal", "/portal").ServeHTTP)
+	r.Route("/dashboard", func(r chi.Router) {
+		r.Get("/", dashboardHandler.ServeIndex)
+		r.Route("/api", func(r chi.Router) {
+			r.Get("/overview", dashboardHandler.Overview)
+			r.Get("/accounts", dashboardHandler.ListAccounts)
+			r.Get("/accounts/{id}/conversations", dashboardHandler.AccountConversations)
+			r.Get("/accounts/{id}/messages", dashboardHandler.AccountMessages)
+			r.Get("/accounts/{id}/stats", dashboardHandler.AccountStats)
+			r.Get("/accounts/{id}/failed-messages", dashboardHandler.AccountFailedMessages)
+			r.Post("/accounts/{id}/regenerate-token", dashboardHandler.RegenerateToken)
+			r.Delete("/accounts/{id}", dashboardHandler.DeleteAccount)
+			r.Delete("/accounts/{id}/conversations/{convId}", dashboardHandler.DeleteConversation)
+			r.Get("/sessions", dashboardHandler.ListSessions)
+			r.Post("/sessions/create", dashboardHandler.CreateSession)
+			r.Post("/sessions/{id}/disconnect", dashboardHandler.DisconnectSession)
+			r.Delete("/sessions/{id}", dashboardHandler.DeleteSession)
+		})
 	})
 
 	cleanupJob := jobs.NewCleanupJob(
-		adminSessionRepo, portalSessionRepo, portalAccessCodeRepo, pairingCodeRepo, inboundMsgRepo,
-		sessionRepo, config.CleanupJobInterval,
+		inboundMsgRepo, sessionRepo, config.CleanupJobInterval,
 	)
 	cleanupJob.Start()
 	defer cleanupJob.Stop()

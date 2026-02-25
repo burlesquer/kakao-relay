@@ -54,7 +54,7 @@ func (r *accountRepo) FindByTokenHash(ctx context.Context, tokenHash string) (*m
 	var account model.Account
 	err := r.db.GetContext(ctx, &account, `
 		SELECT * FROM accounts
-		WHERE relay_token_hash = $1 AND disabled_at IS NULL
+		WHERE relay_token_hash = $1
 	`, tokenHash)
 	return HandleNotFound(&account, err)
 }
@@ -75,10 +75,10 @@ func (r *accountRepo) FindAll(ctx context.Context, limit, offset int) ([]model.A
 func (r *accountRepo) Create(ctx context.Context, params model.CreateAccountParams) (*model.Account, error) {
 	var account model.Account
 	err := r.db.GetContext(ctx, &account, `
-		INSERT INTO accounts (openclaw_user_id, relay_token_hash, mode, rate_limit_per_minute)
-		VALUES ($1, $2, $3, $4)
+		INSERT INTO accounts (relay_token_hash, rate_limit_per_minute)
+		VALUES ($1, $2)
 		RETURNING *
-	`, params.OpenclawUserID, params.RelayTokenHash, params.Mode, params.RateLimitPerMin)
+	`, params.RelayTokenHash, params.RateLimitPerMin)
 	if err != nil {
 		return nil, err
 	}
@@ -89,14 +89,11 @@ func (r *accountRepo) Update(ctx context.Context, id string, params model.Update
 	var account model.Account
 	err := r.db.GetContext(ctx, &account, `
 		UPDATE accounts SET
-			openclaw_user_id = COALESCE($2, openclaw_user_id),
-			mode = COALESCE($3, mode),
-			rate_limit_per_minute = COALESCE($4, rate_limit_per_minute),
-			disabled_at = $5,
-			updated_at = $6
+			rate_limit_per_minute = COALESCE($2, rate_limit_per_minute),
+			updated_at = $3
 		WHERE id = $1
 		RETURNING *
-	`, id, params.OpenclawUserID, params.Mode, params.RateLimitPerMin, params.DisabledAt, time.Now())
+	`, id, params.RateLimitPerMin, time.Now())
 	return HandleNotFound(&account, err)
 }
 

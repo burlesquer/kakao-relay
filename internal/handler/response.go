@@ -22,6 +22,7 @@ func formatTime(t *time.Time) any {
 
 func formatConversation(conv model.ConversationMapping) map[string]any {
 	return map[string]any{
+		"id":              conv.ID,
 		"conversationKey": conv.ConversationKey,
 		"state":           conv.State,
 		"pairedAt":        formatTime(conv.PairedAt),

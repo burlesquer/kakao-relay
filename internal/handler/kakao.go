@@ -9,14 +9,13 @@ import (
 
 	"github.com/rs/zerolog/log"
 
-	"gitlab.tepseg.com/ai/kakao-relay/internal/audit"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
 )
 
 type Command struct {
-	Type string // PAIR, UNPAIR, STATUS, HELP, CODE
+	Type string // PAIR, UNPAIR, STATUS, HELP
 	Code string
 }
 
@@ -42,40 +41,30 @@ func parseCommand(utterance string) *Command {
 		return &Command{Type: "HELP"}
 	}
 
-	if trimmed == "/code" {
-		return &Command{Type: "CODE"}
-	}
-
 	return nil
 }
 
 type KakaoHandler struct {
-	convService         *service.ConversationService
-	sessionService      *service.SessionService
-	messageService      *service.MessageService
-	portalAccessService *service.PortalAccessService
-	broker              *sse.Broker
-	callbackTTL         time.Duration
-	portalBaseURL       string
+	convService    *service.ConversationService
+	sessionService *service.SessionService
+	messageService *service.MessageService
+	broker         *sse.Broker
+	callbackTTL    time.Duration
 }
 
 func NewKakaoHandler(
 	convService *service.ConversationService,
 	sessionService *service.SessionService,
 	messageService *service.MessageService,
-	portalAccessService *service.PortalAccessService,
 	broker *sse.Broker,
 	callbackTTL time.Duration,
-	portalBaseURL string,
 ) *KakaoHandler {
 	return &KakaoHandler{
-		convService:         convService,
-		sessionService:      sessionService,
-		messageService:      messageService,
-		portalAccessService: portalAccessService,
-		broker:              broker,
-		callbackTTL:         callbackTTL,
-		portalBaseURL:       portalBaseURL,
+		convService:    convService,
+		sessionService: sessionService,
+		messageService: messageService,
+		broker:         broker,
+		callbackTTL:    callbackTTL,
 	}
 }
 
@@ -259,60 +248,6 @@ func (h *KakaoHandler) handleCommand(r *http.Request, cmd *Command, conv *model.
 		}
 		return NewTextResponse("❌ 연결되지 않음\n\n/pair <코드>로 연결하세요.")
 
-	case "CODE":
-		if conv.State != model.PairingStatePaired {
-			return NewTextResponse(
-				"포털 접속 코드는 연결된 대화에서만 발급할 수 있습니다.\n\n" +
-					"먼저 /pair <코드>로 연결하세요.",
-			)
-		}
-
-		// Rate limit check: 3 times per 5 minutes
-		allowed, resetAt := h.portalAccessService.CheckCodeGenerationLimit(ctx, conversationKey)
-		if !allowed {
-			minutesLeft := int(time.Until(resetAt).Minutes()) + 1
-			return NewTextResponse(fmt.Sprintf(
-				"⏱️ 코드 생성 한도 초과\n\n"+
-					"5분에 최대 3회까지 코드를 생성할 수 있습니다.\n\n"+
-					"%d분 후 다시 시도해주세요.",
-				minutesLeft,
-			))
-		}
-
-		code, err := h.portalAccessService.GenerateCode(ctx, conversationKey)
-		if err != nil {
-			log.Error().Err(err).Msg("failed to generate portal access code")
-			return NewTextResponse("코드 생성에 실패했습니다. 잠시 후 다시 시도해주세요.")
-		}
-
-		// Audit log
-		auditEvent := audit.Event{
-			Type: audit.EventCodeGenerate,
-			Details: map[string]interface{}{
-				"conversationKey": conversationKey,
-				"code":            code.Code,
-				"expiresAt":       code.ExpiresAt,
-			},
-		}
-		if conv.AccountID != nil {
-			auditEvent.AccountID = *conv.AccountID
-		}
-		audit.LogFromRequest(r, auditEvent)
-
-		expiresIn := int(time.Until(code.ExpiresAt).Minutes())
-		msg := fmt.Sprintf(
-			"🔑 포털 접속 코드\n\n"+
-				"코드: %s\n"+
-				"유효시간: %d분\n\n"+
-				"이 코드로 포털에서 대화 내역과 통계를 확인할 수 있습니다.",
-			code.Code,
-			expiresIn,
-		)
-		if h.portalBaseURL != "" {
-			msg += fmt.Sprintf("\n\n포털 주소:\n%s/portal/code", h.portalBaseURL)
-		}
-		return NewTextResponse(msg)
-
 	case "HELP":
 		return NewTextResponse(
 			"📖 도움말\n\n" +
@@ -321,7 +256,6 @@ func (h *KakaoHandler) handleCommand(r *http.Request, cmd *Command, conv *model.
 				"• /pair <코드> - OpenClaw에 연결\n" +
 				"• /unpair - 연결 해제\n" +
 				"• /status - 연결 상태 확인\n" +
-				"• /code - 포털 접속 코드 발급\n" +
 				"• /help - 이 도움말",
 		)
 

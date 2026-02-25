@@ -37,13 +37,15 @@ type SessionStatusResult struct {
 	PairedAt    *time.Time          `json:"pairedAt,omitempty"`
 	KakaoUserID *string             `json:"kakaoUserId,omitempty"`
 	AccountID   *string             `json:"accountId,omitempty"`
+	RelayToken  *string             `json:"relayToken,omitempty"`
 }
 
 type SessionPairResult struct {
-	Success   bool
-	SessionID string
-	AccountID string
-	Error     string
+	Success    bool
+	SessionID  string
+	AccountID  string
+	RelayToken string
+	Error      string
 }
 
 type SessionService struct {
@@ -125,6 +127,16 @@ func (s *SessionService) GetStatus(ctx context.Context, tokenHash string) (*Sess
 		AccountID: session.AccountID,
 	}
 
+	// Extract relay token from metadata if available
+	if session.Metadata != nil {
+		var meta map[string]string
+		if err := json.Unmarshal(*session.Metadata, &meta); err == nil {
+			if rt, ok := meta["relayToken"]; ok {
+				result.RelayToken = &rt
+			}
+		}
+	}
+
 	// Extract kakaoUserId from conversation key if available
 	if session.PairedConversationKey != nil {
 		parts := strings.Split(*session.PairedConversationKey, ":")
@@ -144,6 +156,18 @@ func (s *SessionService) FindByID(ctx context.Context, id string) (*model.Sessio
 	return s.sessionRepo.FindByID(ctx, id)
 }
 
+func (s *SessionService) FindRecent(ctx context.Context, limit int) ([]model.Session, error) {
+	return s.sessionRepo.FindRecent(ctx, limit)
+}
+
+func (s *SessionService) Disconnect(ctx context.Context, id string) error {
+	return s.sessionRepo.MarkDisconnected(ctx, id)
+}
+
+func (s *SessionService) Delete(ctx context.Context, id string) error {
+	return s.sessionRepo.Delete(ctx, id)
+}
+
 func (s *SessionService) VerifyPairingCode(ctx context.Context, code, conversationKey string) SessionPairResult {
 	normalizedCode := strings.ToUpper(strings.TrimSpace(code))
 
@@ -160,6 +184,7 @@ func (s *SessionService) VerifyPairingCode(ctx context.Context, code, conversati
 	}
 
 	var account *model.Account
+	var relayToken string
 
 	// Use transaction to ensure atomicity of account creation + session pairing
 	err = s.db.WithTx(ctx, func(tx *sqlx.Tx) error {
@@ -168,7 +193,7 @@ func (s *SessionService) VerifyPairingCode(ctx context.Context, code, conversati
 
 		// Create account for this session within transaction
 		var createErr error
-		account, createErr = s.createAccountForSessionTx(ctx, txAccountRepo, session.ID)
+		account, relayToken, createErr = s.createAccountForSessionTx(ctx, txAccountRepo, session.ID)
 		if createErr != nil {
 			return fmt.Errorf("create account: %w", createErr)
 		}
@@ -176,6 +201,12 @@ func (s *SessionService) VerifyPairingCode(ctx context.Context, code, conversati
 		// Mark session as paired within the same transaction
 		if markErr := txSessionRepo.MarkPaired(ctx, session.ID, account.ID, conversationKey); markErr != nil {
 			return fmt.Errorf("mark paired: %w", markErr)
+		}
+
+		// Store relay token in session metadata for dashboard retrieval
+		metadata, _ := json.Marshal(map[string]string{"relayToken": relayToken})
+		if metaErr := txSessionRepo.UpdateMetadata(ctx, session.ID, metadata); metaErr != nil {
+			return fmt.Errorf("update metadata: %w", metaErr)
 		}
 
 		return nil
@@ -193,34 +224,34 @@ func (s *SessionService) VerifyPairingCode(ctx context.Context, code, conversati
 		Msg("session paired successfully")
 
 	return SessionPairResult{
-		Success:   true,
-		SessionID: session.ID,
-		AccountID: account.ID,
+		Success:    true,
+		SessionID:  session.ID,
+		AccountID:  account.ID,
+		RelayToken: relayToken,
 	}
 }
 
-func (s *SessionService) createAccountForSession(ctx context.Context, sessionID string) (*model.Account, error) {
+func (s *SessionService) createAccountForSession(ctx context.Context, sessionID string) (*model.Account, string, error) {
 	return s.createAccountForSessionTx(ctx, s.accountRepo, sessionID)
 }
 
-func (s *SessionService) createAccountForSessionTx(ctx context.Context, accountRepo repository.AccountRepository, sessionID string) (*model.Account, error) {
+func (s *SessionService) createAccountForSessionTx(ctx context.Context, accountRepo repository.AccountRepository, sessionID string) (*model.Account, string, error) {
 	token, err := util.GenerateToken()
 	if err != nil {
-		return nil, fmt.Errorf("generate token: %w", err)
+		return nil, "", fmt.Errorf("generate token: %w", err)
 	}
 
 	tokenHash := util.HashToken(token)
 
 	account, err := accountRepo.Create(ctx, model.CreateAccountParams{
 		RelayTokenHash:  tokenHash,
-		Mode:            model.AccountModeRelay,
 		RateLimitPerMin: 60,
 	})
 	if err != nil {
-		return nil, fmt.Errorf("create account: %w", err)
+		return nil, "", fmt.Errorf("create account: %w", err)
 	}
 
-	return account, nil
+	return account, token, nil
 }
 
 func (s *SessionService) PublishPairingComplete(ctx context.Context, session *model.Session, conversationKey string) error {

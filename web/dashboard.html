@@ -1,0 +1,863 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Kakao Relay Dashboard</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+*,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
+:root{
+  --bg-primary:#0f1117;
+  --bg-secondary:#1a1d2e;
+  --bg-tertiary:#242842;
+  --bg-hover:#2a2f4a;
+  --border:#2e3348;
+  --text-primary:#e2e8f0;
+  --text-secondary:#94a3b8;
+  --text-muted:#64748b;
+  --accent-blue:#3b82f6;
+  --accent-green:#22c55e;
+  --accent-yellow:#eab308;
+  --accent-red:#ef4444;
+  --accent-cyan:#06b6d4;
+  --radius:8px;
+  --shadow:0 2px 8px rgba(0,0,0,.3);
+}
+html,body{height:100%;font-family:'Inter',system-ui,-apple-system,sans-serif;background:var(--bg-primary);color:var(--text-primary);font-size:14px;line-height:1.5}
+a{color:var(--accent-blue);text-decoration:none}
+button{font-family:inherit;cursor:pointer}
+
+/* Layout */
+.app{display:flex;height:100vh;overflow:hidden}
+.sidebar{width:240px;background:var(--bg-secondary);border-right:1px solid var(--border);display:flex;flex-direction:column;flex-shrink:0;overflow-y:auto}
+.sidebar-header{padding:20px;border-bottom:1px solid var(--border)}
+.sidebar-header h1{font-size:16px;font-weight:700;color:var(--text-primary)}
+.sidebar-header p{font-size:11px;color:var(--text-muted);margin-top:2px}
+.sidebar-nav{padding:12px;flex:1}
+.nav-item{display:flex;align-items:center;gap:10px;padding:10px 12px;border-radius:var(--radius);color:var(--text-secondary);font-size:13px;font-weight:500;cursor:pointer;transition:all .15s;border:none;background:none;width:100%;text-align:left}
+.nav-item:hover{background:var(--bg-tertiary);color:var(--text-primary)}
+.nav-item.active{background:var(--accent-blue);color:#fff}
+.nav-item svg{width:18px;height:18px;flex-shrink:0}
+.sidebar-footer{padding:16px;border-top:1px solid var(--border);font-size:11px;color:var(--text-muted)}
+.sidebar-footer .refresh-info{display:flex;align-items:center;gap:6px}
+
+/* Main */
+.main{flex:1;overflow-y:auto;padding:24px 32px}
+.main-header{margin-bottom:24px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:12px}
+.main-header h2{font-size:22px;font-weight:700}
+
+/* Cards */
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(220px,1fr));gap:16px;margin-bottom:24px}
+.card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);padding:20px;border-left:3px solid var(--accent-blue);box-shadow:var(--shadow);transition:border-color .15s}
+.card.green{border-left-color:var(--accent-green)}
+.card.red{border-left-color:var(--accent-red)}
+.card.yellow{border-left-color:var(--accent-yellow)}
+.card.cyan{border-left-color:var(--accent-cyan)}
+.card-label{font-size:12px;font-weight:500;color:var(--text-muted);text-transform:uppercase;letter-spacing:.5px;margin-bottom:8px}
+.card-value{font-size:32px;font-weight:700;font-variant-numeric:tabular-nums;line-height:1.1}
+.card-sub{font-size:12px;color:var(--text-secondary);margin-top:6px}
+
+/* Health indicator */
+.health{display:flex;align-items:center;gap:8px}
+.health-dot{width:10px;height:10px;border-radius:50%;background:var(--accent-green);animation:pulse 2s infinite}
+.health-dot.offline{background:var(--accent-red);animation:none}
+@keyframes pulse{0%,100%{opacity:1}50%{opacity:.4}}
+
+/* Section */
+.section{margin-bottom:32px}
+.section-title{font-size:15px;font-weight:600;color:var(--text-secondary);margin-bottom:12px;display:flex;align-items:center;gap:8px}
+
+/* Table */
+.table-wrap{overflow-x:auto;background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius)}
+table{width:100%;border-collapse:collapse}
+th,td{padding:10px 14px;text-align:left;font-size:13px;white-space:nowrap}
+th{background:var(--bg-tertiary);color:var(--text-muted);font-weight:600;font-size:11px;text-transform:uppercase;letter-spacing:.5px;position:sticky;top:0}
+tr:not(:last-child) td{border-bottom:1px solid var(--border)}
+tr:hover td{background:var(--bg-tertiary)}
+
+/* Badge */
+.badge{display:inline-block;padding:2px 8px;border-radius:12px;font-size:11px;font-weight:600;line-height:1.5}
+.badge-green{background:rgba(34,197,94,.15);color:var(--accent-green)}
+.badge-yellow{background:rgba(234,179,8,.15);color:var(--accent-yellow)}
+.badge-red{background:rgba(239,68,68,.15);color:var(--accent-red)}
+.badge-blue{background:rgba(59,130,246,.15);color:var(--accent-blue)}
+.badge-gray{background:rgba(100,116,139,.15);color:var(--text-muted)}
+
+/* Button */
+.btn{display:inline-flex;align-items:center;gap:6px;padding:8px 16px;border-radius:var(--radius);font-size:13px;font-weight:600;border:none;transition:all .15s}
+.btn-primary{background:var(--accent-blue);color:#fff}
+.btn-primary:hover{background:#2563eb}
+.btn-sm{padding:5px 10px;font-size:12px}
+.btn-danger{background:var(--accent-red);color:#fff}
+.btn-danger:hover{background:#dc2626}
+.btn-warning{background:var(--accent-yellow);color:#000}
+.btn-warning:hover{background:#ca8a04}
+.btn-ghost{background:none;border:1px solid var(--border);color:var(--text-secondary)}
+.btn-ghost:hover{background:var(--bg-tertiary);color:var(--text-primary)}
+.btn:disabled{opacity:.5;cursor:not-allowed}
+.action-group{display:flex;gap:6px;flex-wrap:nowrap}
+
+/* Modal */
+.modal-overlay{position:fixed;inset:0;background:rgba(0,0,0,.6);display:flex;align-items:center;justify-content:center;z-index:100;opacity:0;pointer-events:none;transition:opacity .2s}
+.modal-overlay.visible{opacity:1;pointer-events:auto}
+.modal{background:var(--bg-secondary);border:1px solid var(--border);border-radius:12px;padding:32px;max-width:440px;width:90%;text-align:center;box-shadow:0 8px 32px rgba(0,0,0,.5)}
+.modal h3{font-size:18px;font-weight:700;margin-bottom:16px}
+.modal .pairing-code{font-size:42px;font-weight:700;letter-spacing:6px;font-variant-numeric:tabular-nums;color:var(--accent-cyan);margin:20px 0;font-family:'Inter',monospace}
+.modal .status-line{font-size:13px;color:var(--text-secondary);margin-bottom:16px;display:flex;align-items:center;justify-content:center;gap:8px}
+.modal .close-btn{margin-top:16px;padding:8px 24px;background:var(--bg-tertiary);color:var(--text-primary);border:1px solid var(--border);border-radius:var(--radius);font-size:13px;font-weight:500;cursor:pointer}
+.modal .close-btn:hover{background:var(--bg-hover)}
+.relay-token-box{background:var(--bg-primary);border:1px solid var(--accent-green);border-radius:var(--radius);padding:12px 16px;margin:12px 0;font-family:monospace;font-size:13px;word-break:break-all;color:var(--accent-green);cursor:pointer;position:relative;transition:border-color .15s}
+.relay-token-box:hover{border-color:var(--accent-cyan)}
+.relay-token-box .copy-hint{position:absolute;top:4px;right:8px;font-size:10px;color:var(--text-muted);font-family:'Inter',sans-serif}
+
+/* Account card */
+.account-card{background:var(--bg-secondary);border:1px solid var(--border);border-radius:var(--radius);margin-bottom:12px;overflow:hidden;transition:border-color .15s}
+.account-card:hover{border-color:var(--accent-blue)}
+.account-header{padding:16px 20px;cursor:pointer;display:flex;align-items:center;justify-content:space-between;gap:16px}
+.account-header .account-info{display:flex;align-items:center;gap:16px;flex-wrap:wrap;flex:1;min-width:0}
+.account-id{font-size:13px;font-weight:600;font-family:monospace;color:var(--accent-cyan);overflow:hidden;text-overflow:ellipsis}
+.account-meta{display:flex;gap:16px;font-size:12px;color:var(--text-muted);flex-wrap:wrap}
+.account-stats{display:flex;gap:12px;font-size:12px;font-weight:600;flex-shrink:0}
+.account-stats .stat{display:flex;align-items:center;gap:4px}
+.account-stats .stat.inbound{color:var(--accent-blue)}
+.account-stats .stat.outbound{color:var(--accent-green)}
+.account-stats .stat.failed{color:var(--accent-red)}
+.account-detail{display:none;padding:0 20px 20px;border-top:1px solid var(--border)}
+.account-detail.open{display:block}
+.chevron{transition:transform .2s;color:var(--text-muted)}
+.chevron.open{transform:rotate(180deg)}
+
+/* Detail tabs */
+.tabs{display:flex;gap:0;margin-bottom:16px;border-bottom:1px solid var(--border)}
+.tab{padding:8px 16px;font-size:12px;font-weight:600;color:var(--text-muted);cursor:pointer;border:none;background:none;border-bottom:2px solid transparent;transition:all .15s}
+.tab:hover{color:var(--text-primary)}
+.tab.active{color:var(--accent-blue);border-bottom-color:var(--accent-blue)}
+
+/* Pagination */
+.pagination{display:flex;align-items:center;justify-content:center;gap:12px;margin-top:12px;font-size:12px;color:var(--text-muted)}
+
+/* Empty state */
+.empty{text-align:center;padding:40px 20px;color:var(--text-muted);font-size:13px}
+
+/* Spinner */
+.spinner{display:inline-block;width:14px;height:14px;border:2px solid var(--text-muted);border-top-color:var(--accent-blue);border-radius:50%;animation:spin .6s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+
+/* Toast */
+.toast{position:fixed;bottom:20px;right:20px;background:var(--bg-tertiary);border:1px solid var(--border);border-radius:var(--radius);padding:12px 20px;font-size:13px;color:var(--text-primary);box-shadow:var(--shadow);transform:translateY(80px);opacity:0;transition:all .3s;z-index:200}
+.toast.show{transform:translateY(0);opacity:1}
+.toast.error{border-left:3px solid var(--accent-red)}
+
+/* Responsive */
+.hamburger{display:none;background:none;border:none;color:var(--text-primary);padding:8px;cursor:pointer}
+@media(max-width:768px){
+  .sidebar{position:fixed;left:-260px;top:0;bottom:0;z-index:50;transition:left .25s}
+  .sidebar.open{left:0}
+  .sidebar-backdrop{display:none;position:fixed;inset:0;background:rgba(0,0,0,.4);z-index:40}
+  .sidebar-backdrop.open{display:block}
+  .hamburger{display:flex}
+  .main{padding:16px}
+  .cards{grid-template-columns:repeat(auto-fill,minmax(160px,1fr));gap:10px}
+  .card-value{font-size:24px}
+}
+</style>
+</head>
+<body>
+
+<div class="sidebar-backdrop" id="backdrop" onclick="toggleSidebar()"></div>
+
+<div class="app">
+  <aside class="sidebar" id="sidebar">
+    <div class="sidebar-header">
+      <h1>Kakao Relay</h1>
+      <p>Monitoring Dashboard</p>
+    </div>
+    <nav class="sidebar-nav">
+      <button class="nav-item active" data-view="overview" onclick="navigate('overview')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="7" height="7" rx="1"/><rect x="14" y="3" width="7" height="7" rx="1"/><rect x="3" y="14" width="7" height="7" rx="1"/><rect x="14" y="14" width="7" height="7" rx="1"/></svg>
+        Overview
+      </button>
+      <button class="nav-item" data-view="sessions" onclick="navigate('sessions')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h4a2 2 0 012 2v14a2 2 0 01-2 2h-4"/><polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/></svg>
+        Sessions
+      </button>
+      <button class="nav-item" data-view="accounts" onclick="navigate('accounts')">
+        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 00-4-4H8a4 4 0 00-4 4v2"/><circle cx="12" cy="7" r="4"/></svg>
+        Accounts
+      </button>
+    </nav>
+    <div class="sidebar-footer">
+      <div class="refresh-info">
+        <span class="spinner" id="refreshSpinner" style="display:none"></span>
+        <span id="refreshStatus">Auto-refresh: 30s</span>
+      </div>
+    </div>
+  </aside>
+
+  <main class="main" id="content">
+    <div class="main-header">
+      <div style="display:flex;align-items:center;gap:12px">
+        <button class="hamburger" onclick="toggleSidebar()">
+          <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+        </button>
+        <h2 id="viewTitle">Overview</h2>
+      </div>
+      <div id="headerActions"></div>
+    </div>
+    <div id="viewContent"></div>
+  </main>
+</div>
+
+<!-- Modal -->
+<div class="modal-overlay" id="modalOverlay">
+  <div class="modal" id="modalContent"></div>
+</div>
+
+<!-- Toast -->
+<div class="toast" id="toast"></div>
+
+<script>
+const API = '/dashboard/api';
+let currentView = 'overview';
+let refreshTimer = null;
+let pollingTimer = null;
+let expandedAccount = null;
+
+// ── Navigation ──
+function navigate(view) {
+  currentView = view;
+  document.querySelectorAll('.nav-item').forEach(el => {
+    el.classList.toggle('active', el.dataset.view === view);
+  });
+  closeSidebar();
+  stopRefresh();
+  clearContent();
+
+  const titles = { overview: 'Overview', sessions: 'Sessions', accounts: 'Accounts' };
+  document.getElementById('viewTitle').textContent = titles[view] || view;
+  document.getElementById('headerActions').innerHTML = '';
+
+  if (view === 'overview') renderOverview();
+  else if (view === 'sessions') renderSessions();
+  else if (view === 'accounts') renderAccounts();
+}
+
+// ── Overview ──
+async function renderOverview() {
+  showLoading();
+  const data = await fetchJSON(`${API}/overview`);
+  if (!data) return;
+
+  const health = data.accounts > 0;
+  const ts = new Date(data.timestamp).toLocaleTimeString();
+
+  document.getElementById('viewContent').innerHTML = `
+    <div class="section">
+      <div class="section-title">
+        <div class="health">
+          <span class="health-dot ${health ? '' : 'offline'}"></span>
+          <span>${health ? 'System Healthy' : 'No Accounts'}</span>
+        </div>
+        <span style="margin-left:auto;font-size:11px;color:var(--text-muted)">Updated ${ts}</span>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">System</div>
+      <div class="cards">
+        <div class="card cyan">
+          <div class="card-label">Accounts</div>
+          <div class="card-value">${data.accounts}</div>
+        </div>
+        <div class="card green">
+          <div class="card-label">Active Sessions</div>
+          <div class="card-value">${data.sessionPaired}</div>
+          <div class="card-sub">${data.sessionPending} pending &middot; ${data.sessionTotal} total</div>
+        </div>
+        <div class="card">
+          <div class="card-label">SSE Clients</div>
+          <div class="card-value">${data.sseClients}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Messages</div>
+      <div class="cards">
+        <div class="card">
+          <div class="card-label">Inbound Total</div>
+          <div class="card-value">${fmt(data.inboundTotal)}</div>
+        </div>
+        <div class="card green">
+          <div class="card-label">Outbound Total</div>
+          <div class="card-value">${fmt(data.outboundTotal)}</div>
+        </div>
+        <div class="card ${data.outboundFailed > 0 ? 'red' : ''}">
+          <div class="card-label">Failed</div>
+          <div class="card-value">${fmt(data.outboundFailed)}</div>
+        </div>
+      </div>
+    </div>
+
+    <div class="section">
+      <div class="section-title">Conversations</div>
+      <div class="cards">
+        <div class="card green">
+          <div class="card-label">Paired</div>
+          <div class="card-value">${data.conversationPaired}</div>
+        </div>
+        <div class="card yellow">
+          <div class="card-label">Unpaired</div>
+          <div class="card-value">${data.conversationUnpaired}</div>
+        </div>
+      </div>
+    </div>
+  `;
+
+  startRefresh(() => renderOverview(), 30000);
+}
+
+// ── Sessions ──
+async function renderSessions() {
+  document.getElementById('headerActions').innerHTML =
+    '<button class="btn btn-primary" onclick="createSession()">+ New Session</button>';
+
+  showLoading();
+  const sessions = await fetchJSON(`${API}/sessions`);
+  if (!sessions) return;
+
+  if (sessions.length === 0) {
+    document.getElementById('viewContent').innerHTML =
+      '<div class="empty">No sessions yet. Create one to get started.</div>';
+    startRefresh(() => renderSessions(), 30000);
+    return;
+  }
+
+  document.getElementById('viewContent').innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>Status</th><th>Pairing Code</th><th>Account</th><th>Created</th><th>Paired</th><th>Expires</th><th>Actions</th>
+        </tr></thead>
+        <tbody>
+          ${sessions.map(s => `<tr>
+            <td>${sessionBadge(s.status)}</td>
+            <td style="font-family:monospace;font-weight:600;letter-spacing:1px">${s.pairingCode}</td>
+            <td style="font-family:monospace;font-size:12px">${s.accountId || '—'}</td>
+            <td>${fmtDate(s.createdAt)}</td>
+            <td>${s.pairedAt ? fmtDate(s.pairedAt) : '—'}</td>
+            <td>${fmtDate(s.expiresAt)}</td>
+            <td>
+              <div class="action-group">
+                ${s.status === 'paired' ? `<button class="btn btn-sm btn-warning" onclick="disconnectSession('${s.id}',event)">Disconnect</button>` : ''}
+                <button class="btn btn-sm btn-danger" onclick="deleteSession('${s.id}',event)">Delete</button>
+              </div>
+            </td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+  `;
+
+  startRefresh(() => renderSessions(), 30000);
+}
+
+async function createSession() {
+  const btn = document.querySelector('#headerActions .btn-primary');
+  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
+
+  const data = await fetchJSON(`${API}/sessions/create`, { method: 'POST' });
+  if (btn) { btn.disabled = false; btn.textContent = '+ New Session'; }
+  if (!data) return;
+
+  showModal(`
+    <h3>Pairing Code</h3>
+    <p style="color:var(--text-secondary);font-size:13px">Enter this code in KakaoTalk with <code>/pair CODE</code></p>
+    <div class="pairing-code">${data.pairingCode}</div>
+    <div class="status-line" id="pairingStatus">
+      <span class="spinner"></span>
+      <span>Waiting for pairing...</span>
+    </div>
+    <div style="font-size:12px;color:var(--text-muted)" id="pairingTimer">Expires in ${data.expiresIn}s</div>
+    <button class="close-btn" onclick="closeModal()">Close</button>
+  `);
+
+  startPairingPoll(data.sessionToken, data.expiresIn);
+}
+
+function startPairingPoll(token, expiresIn) {
+  stopPolling();
+  let remaining = expiresIn;
+
+  const countdownEl = document.getElementById('pairingTimer');
+  const statusEl = document.getElementById('pairingStatus');
+  const countdown = setInterval(() => {
+    remaining--;
+    if (countdownEl) countdownEl.textContent = `Expires in ${remaining}s`;
+    if (remaining <= 0) clearInterval(countdown);
+  }, 1000);
+
+  pollingTimer = setInterval(async () => {
+    try {
+      const res = await fetch(`/v1/sessions/${token}/status`);
+      const result = await res.json();
+
+      if (result.status === 'paired') {
+        stopPolling();
+        clearInterval(countdown);
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-green);font-weight:600">Paired successfully!</span>';
+        if (countdownEl) countdownEl.textContent = '';
+        if (result.relayToken) {
+          showPairedModal(result.relayToken, result.accountId);
+        } else {
+          showToast('Session paired successfully');
+          setTimeout(() => { closeModal(); renderSessions(); }, 1500);
+        }
+      } else if (result.status === 'expired') {
+        stopPolling();
+        clearInterval(countdown);
+        if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-red)">Session expired</span>';
+        if (countdownEl) countdownEl.textContent = '';
+      }
+    } catch (e) { /* ignore polling errors */ }
+  }, 2000);
+}
+
+function showPairedModal(relayToken, accountId) {
+  showModal(`
+    <h3 style="color:var(--accent-green)">Pairing Complete</h3>
+    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">Your relay token has been generated. Copy and save it now — it cannot be retrieved later.</p>
+    ${accountId ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Account: <code style="color:var(--accent-cyan)">${esc(accountId)}</code></p>` : ''}
+    <div class="relay-token-box" onclick="copyToken(this)" title="Click to copy">
+      <span class="copy-hint">click to copy</span>
+      ${esc(relayToken)}
+    </div>
+    <p style="font-size:11px;color:var(--accent-yellow);margin:8px 0 16px">This token is shown only once. Store it securely.</p>
+    <button class="close-btn" onclick="closeModal();renderSessions()">Done</button>
+  `);
+}
+
+function copyToken(el) {
+  const text = el.textContent.replace('click to copy', '').trim();
+  navigator.clipboard.writeText(text).then(() => {
+    showToast('Token copied to clipboard');
+    el.querySelector('.copy-hint').textContent = 'copied!';
+  }).catch(() => {
+    // Fallback: select text
+    const range = document.createRange();
+    range.selectNodeContents(el);
+    window.getSelection().removeAllRanges();
+    window.getSelection().addRange(range);
+    showToast('Select all and copy (Ctrl+C)');
+  });
+}
+
+async function disconnectSession(id, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Disconnect this session?')) return;
+  const data = await fetchJSON(`${API}/sessions/${id}/disconnect`, { method: 'POST' });
+  if (data) { showToast('Session disconnected'); renderSessions(); }
+}
+
+async function deleteSession(id, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Delete this session permanently?')) return;
+  const data = await fetchJSON(`${API}/sessions/${id}`, { method: 'DELETE' });
+  if (data) { showToast('Session deleted'); renderSessions(); }
+}
+
+// ── Accounts ──
+async function renderAccounts() {
+  showLoading();
+  const accounts = await fetchJSON(`${API}/accounts`);
+  if (!accounts) return;
+
+  if (accounts.length === 0) {
+    document.getElementById('viewContent').innerHTML =
+      '<div class="empty">No accounts. Create a session and pair it first.</div>';
+    startRefresh(() => renderAccounts(), 30000);
+    return;
+  }
+
+  document.getElementById('viewContent').innerHTML = `
+    <div id="accountList">
+      ${accounts.map(a => `
+        <div class="account-card" id="acc-${a.id}">
+          <div class="account-header" onclick="toggleAccount('${a.id}')">
+            <div class="account-info">
+              <span class="account-id">${a.id}</span>
+              <div class="account-meta">
+                <span>Rate: ${a.rateLimitPerMinute}/min</span>
+                <span>Created: ${fmtDate(a.createdAt)}</span>
+              </div>
+            </div>
+            <div class="account-stats">
+              <span class="stat inbound" title="Inbound today">&darr; ${a.inboundToday ?? 0}</span>
+              <span class="stat outbound" title="Outbound today">&uarr; ${a.outboundToday ?? 0}</span>
+              ${(a.outboundFailed ?? 0) > 0 ? `<span class="stat failed" title="Failed">&times; ${a.outboundFailed}</span>` : ''}
+            </div>
+            <div class="action-group" style="margin-right:8px">
+              <button class="btn btn-sm btn-ghost" onclick="regenerateToken('${a.id}',event)" title="Regenerate Token">&#x1f511;</button>
+              <button class="btn btn-sm btn-danger" onclick="deleteAccount('${a.id}',event)" title="Delete Account">&#x2715;</button>
+            </div>
+            <span class="chevron ${expandedAccount === a.id ? 'open' : ''}" id="chevron-${a.id}">&#9660;</span>
+          </div>
+          <div class="account-detail ${expandedAccount === a.id ? 'open' : ''}" id="detail-${a.id}"></div>
+        </div>
+      `).join('')}
+    </div>
+  `;
+
+  if (expandedAccount) loadAccountDetail(expandedAccount);
+  startRefresh(() => renderAccounts(), 30000);
+}
+
+async function toggleAccount(id) {
+  if (expandedAccount === id) {
+    expandedAccount = null;
+    document.getElementById(`detail-${id}`).classList.remove('open');
+    document.getElementById(`chevron-${id}`).classList.remove('open');
+    return;
+  }
+
+  // Close previous
+  if (expandedAccount) {
+    const prev = document.getElementById(`detail-${expandedAccount}`);
+    const prevChev = document.getElementById(`chevron-${expandedAccount}`);
+    if (prev) prev.classList.remove('open');
+    if (prevChev) prevChev.classList.remove('open');
+  }
+
+  expandedAccount = id;
+  document.getElementById(`detail-${id}`).classList.add('open');
+  document.getElementById(`chevron-${id}`).classList.add('open');
+  loadAccountDetail(id);
+}
+
+async function loadAccountDetail(id) {
+  const el = document.getElementById(`detail-${id}`);
+  if (!el) return;
+  el.innerHTML = '<div style="padding:20px;text-align:center"><span class="spinner"></span></div>';
+
+  const [stats, convs, failed] = await Promise.all([
+    fetchJSON(`${API}/accounts/${id}/stats`),
+    fetchJSON(`${API}/accounts/${id}/conversations`),
+    fetchJSON(`${API}/accounts/${id}/failed-messages`),
+  ]);
+
+  el.innerHTML = `
+    <div style="padding-top:16px">
+      <div class="section">
+        <div class="section-title">Statistics</div>
+        <div class="cards" style="grid-template-columns:repeat(auto-fill,minmax(150px,1fr))">
+          <div class="card"><div class="card-label">Inbound Today</div><div class="card-value" style="font-size:24px">${stats?.inboundToday ?? '—'}</div></div>
+          <div class="card green"><div class="card-label">Outbound Today</div><div class="card-value" style="font-size:24px">${stats?.outboundToday ?? '—'}</div></div>
+          <div class="card ${(stats?.outboundFailed??0)>0?'red':''}"><div class="card-label">Failed</div><div class="card-value" style="font-size:24px">${stats?.outboundFailed ?? '—'}</div></div>
+          <div class="card cyan"><div class="card-label">SSE Clients</div><div class="card-value" style="font-size:24px">${stats?.sseClients ?? 0}</div></div>
+          <div class="card"><div class="card-label">Conversations</div><div class="card-value" style="font-size:24px">${stats?.conversations ?? 0}</div></div>
+          <div class="card"><div class="card-label">Inbound Total</div><div class="card-value" style="font-size:24px">${fmt(stats?.inboundTotal)}</div></div>
+          <div class="card green"><div class="card-label">Outbound Total</div><div class="card-value" style="font-size:24px">${fmt(stats?.outboundTotal)}</div></div>
+        </div>
+      </div>
+
+      ${convs && convs.length > 0 ? `
+      <div class="section">
+        <div class="section-title">Conversations (${convs.length})</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>Key</th><th>State</th><th>Paired At</th><th>Last Seen</th><th>Actions</th></tr></thead>
+            <tbody>
+              ${convs.map(c => `<tr>
+                <td style="font-family:monospace;font-size:12px">${esc(c.conversationKey)}</td>
+                <td>${convBadge(c.state)}</td>
+                <td>${c.pairedAt ? fmtDate(c.pairedAt) : '—'}</td>
+                <td>${fmtDate(c.lastSeenAt)}</td>
+                <td><button class="btn btn-sm btn-danger" onclick="deleteConversation('${id}','${c.id}',event)">Delete</button></td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      ${failed && failed.length > 0 ? `
+      <div class="section">
+        <div class="section-title" style="color:var(--accent-red)">Failed Messages (${failed.length})</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr><th>ID</th><th>Conversation</th><th>Error</th><th>Created</th></tr></thead>
+            <tbody>
+              ${failed.map(m => `<tr>
+                <td style="font-family:monospace;font-size:11px">${m.id.substring(0,8)}...</td>
+                <td style="font-family:monospace;font-size:11px">${esc(m.conversationKey)}</td>
+                <td style="color:var(--accent-red);max-width:300px;overflow:hidden;text-overflow:ellipsis">${esc(m.errorMessage || '—')}</td>
+                <td>${fmtDate(m.createdAt)}</td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>` : ''}
+
+      <div class="section">
+        <div class="tabs">
+          <button class="tab active" onclick="loadMessages('${id}','inbound',0,this)">Inbound</button>
+          <button class="tab" onclick="loadMessages('${id}','outbound',0,this)">Outbound</button>
+        </div>
+        <div id="msgTable-${id}"><div style="text-align:center;padding:16px"><span class="spinner"></span></div></div>
+      </div>
+    </div>
+  `;
+
+  loadMessages(id, 'inbound', 0);
+}
+
+async function loadMessages(accountId, type, offset, tabEl) {
+  if (tabEl) {
+    tabEl.parentElement.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+    tabEl.classList.add('active');
+  }
+
+  const container = document.getElementById(`msgTable-${accountId}`);
+  if (!container) return;
+  container.innerHTML = '<div style="text-align:center;padding:16px"><span class="spinner"></span></div>';
+
+  const limit = 15;
+  const msgs = await fetchJSON(`${API}/accounts/${accountId}/messages?type=${type}&limit=${limit}&offset=${offset}`);
+  if (!msgs) { container.innerHTML = '<div class="empty">Failed to load</div>'; return; }
+
+  if (msgs.length === 0) {
+    container.innerHTML = '<div class="empty">No messages</div>';
+    return;
+  }
+
+  const isInbound = type === 'inbound';
+  container.innerHTML = `
+    <div class="table-wrap">
+      <table>
+        <thead><tr>
+          <th>ID</th><th>Conversation</th><th>Status</th>
+          ${isInbound ? '<th>Payload</th>' : '<th>Response</th>'}
+          <th>Created</th>
+        </tr></thead>
+        <tbody>
+          ${msgs.map(m => `<tr>
+            <td style="font-family:monospace;font-size:11px">${m.id.substring(0,8)}...</td>
+            <td style="font-family:monospace;font-size:11px">${esc(m.conversationKey)}</td>
+            <td>${msgBadge(m.status)}</td>
+            <td style="max-width:250px;overflow:hidden;text-overflow:ellipsis;font-size:11px">${isInbound ? truncPayload(m.normalizedMessage || m.kakaoPayload) : truncPayload(m.responsePayload)}</td>
+            <td>${fmtDate(m.createdAt)}</td>
+          </tr>`).join('')}
+        </tbody>
+      </table>
+    </div>
+    <div class="pagination">
+      ${offset > 0 ? `<button class="btn btn-sm" onclick="loadMessages('${accountId}','${type}',${offset - limit})">&laquo; Prev</button>` : ''}
+      <span>Showing ${offset + 1}–${offset + msgs.length}</span>
+      ${msgs.length === limit ? `<button class="btn btn-sm" onclick="loadMessages('${accountId}','${type}',${offset + limit})">Next &raquo;</button>` : ''}
+    </div>
+  `;
+}
+
+// ── Account Management ──
+async function regenerateToken(accountId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Regenerate relay token? The current token will be invalidated immediately.')) return;
+  const data = await fetchJSON(`${API}/accounts/${accountId}/regenerate-token`, { method: 'POST' });
+  if (data && data.relayToken) {
+    showModal(`
+      <h3>New Relay Token</h3>
+      <p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">Token regenerated for account <code style="color:var(--accent-cyan)">${esc(accountId)}</code></p>
+      <div class="relay-token-box" onclick="copyToken(this)" title="Click to copy">
+        <span class="copy-hint">click to copy</span>
+        ${esc(data.relayToken)}
+      </div>
+      <p style="font-size:11px;color:var(--accent-yellow);margin:8px 0 16px">This token is shown only once. Store it securely.</p>
+      <button class="close-btn" onclick="closeModal()">Done</button>
+    `);
+  }
+}
+
+async function deleteAccount(accountId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm(`Delete account ${accountId}? This cannot be undone.`)) return;
+  const data = await fetchJSON(`${API}/accounts/${accountId}`, { method: 'DELETE' });
+  if (data) {
+    expandedAccount = null;
+    showToast('Account deleted');
+    renderAccounts();
+  }
+}
+
+async function deleteConversation(accountId, convId, event) {
+  if (event) event.stopPropagation();
+  if (!confirm('Delete this conversation?')) return;
+  const data = await fetchJSON(`${API}/accounts/${accountId}/conversations/${convId}`, { method: 'DELETE' });
+  if (data) {
+    showToast('Conversation deleted');
+    loadAccountDetail(accountId);
+  }
+}
+
+// ── API Helpers ──
+async function fetchJSON(url, opts = {}) {
+  showRefreshSpinner(true);
+  try {
+    const res = await fetch(url, { headers: { 'Content-Type': 'application/json' }, ...opts });
+    if (!res.ok) {
+      const err = await res.json().catch(() => ({ error: res.statusText }));
+      showToast(err.error || 'Request failed', true);
+      return null;
+    }
+    return await res.json();
+  } catch (e) {
+    showToast('Network error', true);
+    return null;
+  } finally {
+    showRefreshSpinner(false);
+  }
+}
+
+// ── Formatting ──
+function fmt(n) {
+  if (n == null) return '—';
+  return Number(n).toLocaleString();
+}
+
+function fmtDate(iso) {
+  if (!iso) return '—';
+  const d = new Date(iso);
+  const now = new Date();
+  const pad = n => String(n).padStart(2, '0');
+
+  if (d.toDateString() === now.toDateString()) {
+    return `${pad(d.getHours())}:${pad(d.getMinutes())}:${pad(d.getSeconds())}`;
+  }
+  return `${d.getMonth()+1}/${d.getDate()} ${pad(d.getHours())}:${pad(d.getMinutes())}`;
+}
+
+function esc(s) {
+  if (!s) return '';
+  const d = document.createElement('div');
+  d.textContent = String(s);
+  return d.innerHTML;
+}
+
+function truncPayload(p) {
+  if (!p) return '—';
+  let s;
+  if (typeof p === 'object') {
+    try { s = JSON.stringify(p); } catch { s = String(p); }
+  } else {
+    s = String(p);
+  }
+  return esc(s.length > 80 ? s.substring(0, 80) + '...' : s);
+}
+
+function sessionBadge(status) {
+  const map = {
+    pending_pairing: ['Pending', 'badge-yellow'],
+    paired: ['Paired', 'badge-green'],
+    expired: ['Expired', 'badge-gray'],
+    disconnected: ['Disconnected', 'badge-red'],
+  };
+  const [label, cls] = map[status] || [status, 'badge-gray'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function convBadge(state) {
+  const map = {
+    paired: ['Paired', 'badge-green'],
+    unpaired: ['Unpaired', 'badge-yellow'],
+    pending: ['Pending', 'badge-blue'],
+    blocked: ['Blocked', 'badge-red'],
+  };
+  const [label, cls] = map[state] || [state, 'badge-gray'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+function msgBadge(status) {
+  const map = {
+    queued: ['Queued', 'badge-yellow'],
+    delivered: ['Delivered', 'badge-blue'],
+    acked: ['Acked', 'badge-green'],
+    expired: ['Expired', 'badge-gray'],
+    pending: ['Pending', 'badge-yellow'],
+    sent: ['Sent', 'badge-green'],
+    failed: ['Failed', 'badge-red'],
+  };
+  const [label, cls] = map[status] || [status, 'badge-gray'];
+  return `<span class="badge ${cls}">${label}</span>`;
+}
+
+// ── UI Helpers ──
+function showLoading() {
+  document.getElementById('viewContent').innerHTML =
+    '<div style="text-align:center;padding:60px"><span class="spinner" style="width:24px;height:24px"></span></div>';
+}
+
+function clearContent() {
+  document.getElementById('viewContent').innerHTML = '';
+}
+
+function showRefreshSpinner(show) {
+  document.getElementById('refreshSpinner').style.display = show ? 'inline-block' : 'none';
+}
+
+function startRefresh(fn, ms) {
+  stopRefresh();
+  refreshTimer = setInterval(fn, ms);
+  document.getElementById('refreshStatus').textContent = `Auto-refresh: ${ms/1000}s`;
+}
+
+function stopRefresh() {
+  if (refreshTimer) { clearInterval(refreshTimer); refreshTimer = null; }
+}
+
+function stopPolling() {
+  if (pollingTimer) { clearInterval(pollingTimer); pollingTimer = null; }
+}
+
+function showModal(html) {
+  document.getElementById('modalContent').innerHTML = html;
+  document.getElementById('modalOverlay').classList.add('visible');
+}
+
+function closeModal() {
+  document.getElementById('modalOverlay').classList.remove('visible');
+  stopPolling();
+}
+
+function showToast(msg, isError) {
+  const el = document.getElementById('toast');
+  el.textContent = msg;
+  el.className = 'toast show' + (isError ? ' error' : '');
+  setTimeout(() => { el.className = 'toast'; }, 3000);
+}
+
+function toggleSidebar() {
+  document.getElementById('sidebar').classList.toggle('open');
+  document.getElementById('backdrop').classList.toggle('open');
+}
+
+function closeSidebar() {
+  document.getElementById('sidebar').classList.remove('open');
+  document.getElementById('backdrop').classList.remove('open');
+}
+
+// Close modal on overlay click
+document.getElementById('modalOverlay').addEventListener('click', e => {
+  if (e.target === e.currentTarget) closeModal();
+});
+
+// Keyboard shortcuts
+document.addEventListener('keydown', e => {
+  if (e.key === 'Escape') closeModal();
+});
+
+// Init
+navigate('overview');
+</script>
+</body>
+</html>

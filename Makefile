@@ -1,4 +1,4 @@
-.PHONY: help up down docker-up docker-down docker-logs docker-clean db-shell db-migrate db-reset dev build ui-build check format lint
+.PHONY: help up down docker-up docker-down docker-logs docker-clean db-shell db-migrate db-reset dev build
 
 .DEFAULT_GOAL := help
 
@@ -62,19 +62,6 @@ dev: ## Start development server with hot reload
 
 build: ## Build for production
 	go build ./cmd/server
-
-ui-build: ## Build admin and portal UIs
-	bun run build:admin
-	bun run build:portal
-
-check: ## Run Biome lint and format check
-	bunx biome check admin/src portal/src
-
-format: ## Format code with Biome
-	bunx biome format --write admin/src portal/src
-
-lint: ## Lint code with Biome
-	bunx biome lint admin/src portal/src
 
 ##@ Quick Start
 
