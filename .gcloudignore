@@ -1,0 +1,54 @@
+# Git
+.git/
+.gitignore
+
+# IDE
+.vscode/
+.idea/
+.cursor/
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# Claude/MCP/Sisyphus internal
+.claude/
+.sisyphus/
+.playwright-mcp/
+
+# Logs
+*.log
+logs/
+
+# Test files
+*_test.go
+internal/*/testdata/
+
+# Documentation
+*.md
+docs/
+
+# Local development
+.env
+.env.*
+
+# Local build artifacts
+/server
+
+# TypeScript/Node (frontend source - not needed for Go build)
+node_modules/
+dist/
+*.tsbuildinfo
+/admin/
+/portal/
+bun.lock
+tsconfig.json
+drizzle.config.ts
+biome.json
+tailwind.config.ts
+package.json
+/src/
+/drizzle/
+
+# Static files handled separately
+/static/
