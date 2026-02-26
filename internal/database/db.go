@@ -3,6 +3,7 @@ package database
 import (
 	"context"
 	"database/sql"
+	_ "embed"
 	"fmt"
 
 	"github.com/jmoiron/sqlx"
@@ -10,6 +11,9 @@ import (
 
 	"gitlab.tepseg.com/ai/kakao-relay/internal/config"
 )
+
+//go:embed schema.sql
+var schemaSQL string
 
 // DBTX is an interface that both *sqlx.DB and *sqlx.Tx satisfy.
 // This allows repositories to work with either a direct connection or a transaction.
@@ -43,6 +47,11 @@ func Connect(databaseURL string) (*DB, error) {
 
 func (db *DB) Ping(ctx context.Context) error {
 	return db.PingContext(ctx)
+}
+
+func (db *DB) Migrate(ctx context.Context) error {
+	_, err := db.ExecContext(ctx, schemaSQL)
+	return err
 }
 
 func (db *DB) Close() error {

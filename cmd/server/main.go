@@ -55,6 +55,13 @@ func main() {
 	cancel()
 	log.Info().Msg("database connected")
 
+	migCtx, migCancel := context.WithTimeout(context.Background(), 30*time.Second)
+	if err := db.Migrate(migCtx); err != nil {
+		log.Fatal().Err(err).Msg("failed to run migrations")
+	}
+	migCancel()
+	log.Info().Msg("database schema ready")
+
 	redisClient, err := redis.NewClient(cfg.RedisURL)
 	if err != nil {
 		log.Fatal().Err(err).Msg("failed to connect to redis")
@@ -107,6 +114,10 @@ func main() {
 	r.Use(chimiddleware.Recoverer)
 	r.Use(chimiddleware.Timeout(config.ServerRequestTimeout))
 	r.Use(bodyLimitMiddleware.Handler)
+
+	r.Get("/", func(w http.ResponseWriter, r *http.Request) {
+		http.Redirect(w, r, "/dashboard/", http.StatusFound)
+	})
 
 	r.Get("/health", func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "application/json")
