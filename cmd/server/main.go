@@ -128,7 +128,7 @@ func main() {
 		})
 	})
 
-	r.Route("/kakao-talkchannel", func(r chi.Router) {
+	r.Route("/kakao", func(r chi.Router) {
 		r.Use(kakaoSignatureMiddleware.Handler)
 		r.Post("/webhook", kakaoHandler.Webhook)
 	})

@@ -38,7 +38,7 @@ Authorization: Bearer <relay_token>
 }
 ```
 
-### POST /kakao-talkchannel/webhook
+### POST /kakao/webhook
 
 카카오톡 채널 오픈빌더 스킬이 호출하는 웹훅.
 

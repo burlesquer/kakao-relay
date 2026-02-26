@@ -73,7 +73,7 @@
 | 항목 | 값 |
 |------|-----|
 | 스킬명 | `릴레이 서버 웹훅` (자유 입력) |
-| URL | `https://{YOUR_RELAY_SERVER}/kakao-talkchannel/webhook` |
+| URL | `https://{YOUR_RELAY_SERVER}/kakao/webhook` |
 
 4. **[저장]**
 
@@ -124,7 +124,7 @@
 사용자 메시지
     │
     ▼
-카카오 → 릴레이 서버: POST /kakao-talkchannel/webhook
+카카오 → 릴레이 서버: POST /kakao/webhook
     │                  (callbackUrl 포함)
     ▼
 릴레이 서버 → 카카오: { "version": "2.0", "useCallback": true }
@@ -238,7 +238,7 @@ curl https://{YOUR_RELAY_SERVER}/health
 ### 스킬 서버 연결 오류
 
 - 릴레이 서버가 **HTTPS**로 접근 가능한지 확인
-- 오픈빌더 스킬 URL이 정확한지 확인: `/kakao-talkchannel/webhook`
+- 오픈빌더 스킬 URL이 정확한지 확인: `/kakao/webhook`
 - 서버 로그에서 웹훅 수신 여부 확인
 
 ### Callback 응답이 전달되지 않음

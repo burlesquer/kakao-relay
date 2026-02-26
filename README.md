@@ -13,7 +13,7 @@
     ▼
 카카오톡 채널 (오픈빌더 스킬)
     │
-    │ POST /kakao-talkchannel/webhook
+    │ POST /kakao/webhook
     ▼
 ┌──────────────────────────────┐
 │        kakao-relay           │

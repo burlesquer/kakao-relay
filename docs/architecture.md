@@ -22,7 +22,7 @@ kakao-relay는 카카오톡 채널과 OpenClaw 인스턴스 사이의 양방향 
 ### 인바운드 (카카오 → OpenClaw)
 
 ```
-1. 카카오 → POST /kakao-talkchannel/webhook
+1. 카카오 → POST /kakao/webhook
    ├─ 서명 검증 (HMAC-SHA256, 선택)
    ├─ conversationKey 생성: ${channelId}:${plusfriendUserKey}
    ├─ conversation_mappings 조회/업데이트
@@ -204,7 +204,7 @@ OpenClaw → 카카오 응답 기록.
 | Recoverer | 전체 | 패닉 복구 |
 | Timeout (60초) | 전체 | 요청 타임아웃 |
 | BodyLimit | 전체 | 요청 본문 크기 제한 |
-| KakaoSignature | `/kakao-talkchannel/*` | HMAC-SHA256 서명 검증 |
+| KakaoSignature | `/kakao/*` | HMAC-SHA256 서명 검증 |
 | Auth | `/v1/*`, `/openclaw/*` | Bearer 토큰 → 계정/세션 인증 |
 | RateLimit (계정) | `/v1/*`, `/openclaw/*` | 인메모리, 분당 한도 |
 | IPRateLimit (Redis) | `/v1/sessions/*` | Redis Sorted Set, 슬라이딩 윈도우 |
