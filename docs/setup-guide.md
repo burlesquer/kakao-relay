@@ -11,7 +11,7 @@
 5. [폴백 블록에 스킬 연결](#5-폴백-블록에-스킬-연결)
 6. [Callback 기능 신청](#6-callback-기능-신청)
 7. [채널 연결 및 배포](#7-채널-연결-및-배포)
-8. [릴레이 서버 설정](#8-릴레이-서버-설정)
+8. [릴레이 서버 실행](#8-릴레이-서버-실행)
 9. [동작 확인](#9-동작-확인)
 
 ---
@@ -22,7 +22,8 @@
 |------|------|
 | 카카오 계정 | [accounts.kakao.com](https://accounts.kakao.com) |
 | 카카오비즈니스 가입 | [business.kakao.com](https://business.kakao.com) |
-| 릴레이 서버 배포 완료 | 공인 IP 또는 도메인 필요 (HTTPS 권장) |
+| Docker + Docker Compose | 서버 실행용 |
+| 공인 IP 또는 도메인 | HTTPS 권장 (카카오 웹훅 수신용) |
 
 > 오픈빌더는 OBT(Open Beta Test) 신청이 필요할 수 있습니다.
 > 신청: [i.kakao.com](https://i.kakao.com/) → 승인까지 약 1~6일 소요
@@ -91,24 +92,6 @@
 4. **봇 응답** 섹션:
    - **[응답 추가]** → **[스킬 데이터]** 선택
 5. **[저장]**
-
-```
-┌────────────────────────────────────────┐
-│           폴백 블록 설정 화면            │
-│                                        │
-│  파라미터 설정                           │
-│  ┌──────────────────────────────────┐  │
-│  │ 스킬 선택: [릴레이 서버 웹훅 ▾]   │  │
-│  └──────────────────────────────────┘  │
-│                                        │
-│  봇 응답                                │
-│  ┌──────────────────────────────────┐  │
-│  │ 응답 유형: [스킬 데이터 ▾]        │  │
-│  └──────────────────────────────────┘  │
-│                                        │
-│               [저장]                    │
-└────────────────────────────────────────┘
-```
 
 > **중요**: 폴백 블록에 연결해야 사용자가 입력하는 **모든 메시지**가 릴레이 서버로 전달됩니다.
 > `/pair`, `/unpair`, `/status` 등의 명령어도 폴백 블록을 통해 릴레이 서버에서 처리합니다.
@@ -180,82 +163,72 @@ OpenClaw: AI 처리 완료 후 릴레이 서버에 응답 전달
 
 ---
 
-## 8. 릴레이 서버 설정
+## 8. 릴레이 서버 실행
 
-### 8-1. 환경변수
+### 8-1. Docker Compose로 실행
 
 ```bash
-# 필수
-DATABASE_URL=postgresql://...
-REDIS_URL=redis://...
-ADMIN_PASSWORD=<강력한_비밀번호>
-ADMIN_SESSION_SECRET=<openssl rand -base64 32>
-PORTAL_SESSION_SECRET=<openssl rand -base64 32>
-
-# 선택
-KAKAO_SIGNATURE_SECRET=<카카오_서명_검증_키>
-PORTAL_BASE_URL=https://{YOUR_RELAY_SERVER}
+git clone https://github.com/burlesquer/kakao-relay.git
+cd kakao-relay
+docker compose up -d
 ```
 
-### 8-2. Account 생성
+PostgreSQL, Redis, 릴레이 서버가 한번에 시작됩니다.
+DB 스키마는 서버 시작 시 자동으로 생성됩니다.
 
-Admin UI(`https://{YOUR_RELAY_SERVER}/admin/`)에서 OpenClaw 인스턴스용 계정을 생성합니다.
+### 8-2. 환경 변수 설정
 
-**Admin UI 사용:**
-1. Admin UI 접속 → 비밀번호 입력
-2. Accounts → Create Account
-3. `relayToken` 안전하게 저장 (1회만 표시)
+`docker-compose.yml`에서 필요한 값을 수정합니다:
 
-**API 사용:**
-```bash
-curl -X POST https://{YOUR_RELAY_SERVER}/admin/api/accounts \
-  -H "Content-Type: application/json" \
-  -d '{"openclawUserId": "my-openclaw-instance"}'
+```yaml
+environment:
+  DATABASE_URL: postgresql://...      # 자동 설정됨
+  REDIS_URL: redis://...              # 자동 설정됨
+  KAKAO_SIGNATURE_SECRET: ""          # (선택) 카카오 서명 검증 키
+  CALLBACK_TTL_SECONDS: "55"          # 콜백 만료 시간
 ```
 
-### 8-3. OpenClaw 연동
+전체 환경 변수 목록은 [README.md](../README.md#환경-변수)를 참고하세요.
 
-OpenClaw 측에서 아래 환경변수를 설정합니다:
+### 8-3. 계정 생성 (대시보드)
 
-```env
-KAKAO_RELAY_URL=https://{YOUR_RELAY_SERVER}
-KAKAO_RELAY_TOKEN=<발급받은_relay_token>
-```
-
-연동 API에 대한 자세한 내용은 [연동 가이드](integration-guide.md)와 [API 스펙](api-spec.md)을 참고하세요.
+1. 브라우저에서 `http://{YOUR_RELAY_SERVER}/dashboard/` 접속
+2. Sessions 탭에서 **세션 생성** → 페어링 코드 발급
+3. 카카오 채팅에서 `/pair <코드>` 입력 → 계정 자동 생성 + 페어링 완료
+4. 발급된 `relayToken`을 OpenClaw에 설정
 
 ---
 
 ## 9. 동작 확인
 
-### 9-1. 페어링 테스트
+### 9-1. 헬스체크
 
-1. OpenClaw에서 페어링 코드 생성:
-   ```bash
-   curl -X POST https://{YOUR_RELAY_SERVER}/openclaw/pairing/generate \
-     -H "Authorization: Bearer <relay_token>" \
-     -H "Content-Type: application/json" \
-     -d '{"expirySeconds": 600}'
-   ```
+```bash
+curl https://{YOUR_RELAY_SERVER}/health
+# → {"status":"ok","timestamp":...}
+```
+
+### 9-2. 페어링 테스트
+
+1. 대시보드에서 세션 생성 → 페어링 코드 확인 (예: `ABCD-1234`)
 2. 카카오톡에서 채널 채팅창 열기
-3. `/pair ABCD-1234` 입력 (발급받은 코드)
+3. `/pair ABCD-1234` 입력
 4. "OpenClaw에 연결되었습니다!" 확인
 
-### 9-2. 메시지 흐름 테스트
+### 9-3. 메시지 흐름 테스트
 
 1. 카카오톡 채팅창에서 아무 메시지 입력
-2. OpenClaw에서 메시지 수신 확인 (SSE 또는 polling)
-3. OpenClaw에서 응답 전송
+2. OpenClaw에서 SSE(`/v1/events`)로 메시지 수신 확인
+3. OpenClaw에서 `POST /openclaw/reply`로 응답 전송
 4. 카카오톡에서 응답 수신 확인
 
-### 9-3. 명령어 테스트
+### 9-4. 명령어 테스트
 
 | 명령어 | 예상 결과 |
 |--------|----------|
 | `/pair <코드>` | "OpenClaw에 연결되었습니다!" |
 | `/status` | 현재 연결 상태 표시 |
 | `/unpair` | "연결이 해제되었습니다" |
-| `/code` | 포털 접속 코드 발급 |
 | `/help` | 도움말 표시 |
 
 ---
@@ -273,24 +246,13 @@ KAKAO_RELAY_TOKEN=<발급받은_relay_token>
 - **Callback 기능 승인** 여부 확인
 - 폴백 블록에서 **Callback 사용** 활성화 여부 확인
 - callbackUrl 유효시간(1분) 내에 응답하는지 확인
-- 릴레이 서버 `CALLBACK_TTL_SECONDS` 설정 확인 (기본 55초)
+- `CALLBACK_TTL_SECONDS` 설정 확인 (기본 55초)
 
 ### 페어링이 안 됨
 
 - `/pair` 명령이 폴백 블록을 통해 릴레이 서버에 전달되는지 확인
-- 페어링 코드 유효시간(기본 10분) 확인
+- 세션 유효시간(5분) 확인
 - 대소문자 구분 없음
-
-### Health Check
-
-```bash
-curl https://{YOUR_RELAY_SERVER}/health
-```
-
-정상 응답:
-```json
-{"status":"ok","timestamp":1706700000000}
-```
 
 ---
 

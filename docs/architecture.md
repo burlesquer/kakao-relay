@@ -1,380 +1,257 @@
-# Relay Server Architecture
+# 시스템 아키텍처
 
 > ※ 이 서비스는 카카오에서 제공하는 공식 서비스가 아닙니다.
 
-## Overview
+## 개요
 
-Relay Server는 **공유 카카오톡 채널**을 통해 다수의 OpenClaw 인스턴스를 연결하는 멀티테넌트 메시지 라우터입니다.
+kakao-relay는 카카오톡 채널과 OpenClaw 인스턴스 사이의 양방향 메시지 릴레이 서버입니다. 카카오 웹훅을 수신하고, SSE로 실시간 전달하며, OpenClaw의 응답을 카카오 콜백 URL로 프록시합니다.
 
 ```
-┌─────────────────────────────────────────────────────────────────────┐
-│                    카카오톡 채널 플랫폼                               │
-│                    (공유 카카오톡 채널 봇)                            │
-└─────────────────────────────────────────────────────────────────────┘
-                                  │
-                                  │ POST /kakao-talkchannel/webhook
-                                  ↓
-┌─────────────────────────────────────────────────────────────────────┐
-│                         Relay Server                                │
-│                                                                     │
-│  ┌─────────────────────────────────────────────────────────────┐   │
-│  │                    Routing Layer                             │   │
-│  │   plusfriendUserKey → conversationKey → accountId            │   │
-│  └─────────────────────────────────────────────────────────────┘   │
-│                              │                                      │
-│        ┌─────────────────────┼─────────────────────┐               │
-│        ↓                     ↓                     ↓               │
-│  ┌──────────┐         ┌──────────┐         ┌──────────┐           │
-│  │ Queue A  │         │ Queue B  │         │ Queue C  │           │
-│  │(owner_A) │         │(owner_B) │         │(owner_C) │           │
-│  └──────────┘         └──────────┘         └──────────┘           │
-│                                                                     │
-└─────────────────────────────────────────────────────────────────────┘
-        │                     │                     │
-        │ GET /messages       │ GET /messages       │ GET /messages
-        ↓                     ↓                     ↓
-   ┌─────────┐          ┌─────────┐          ┌─────────┐
-   │OpenClaw │          │OpenClaw │          │OpenClaw │
-   │   A     │          │   B     │          │   C     │
-   └─────────┘          └─────────┘          └─────────┘
+┌──────────────┐     ┌──────────────────────┐     ┌──────────────┐
+│  카카오톡     │     │     kakao-relay      │     │   OpenClaw   │
+│  채널 사용자  │◀───▶│                      │◀───▶│   인스턴스   │
+└──────────────┘     │  ┌────────────────┐  │     └──────────────┘
+                     │  │  PostgreSQL    │  │
+      Webhook POST ──▶  │  Redis Pub/Sub │  ◀── SSE /v1/events
+      Callback POST ◀── └────────────────┘  ◀── POST /openclaw/reply
+                     └──────────────────────┘
 ```
 
 ---
 
-## Core Concepts
+## 메시지 흐름
 
-### 1. Conversation Key
-
-사용자를 고유하게 식별하는 복합 키:
+### 인바운드 (카카오 → OpenClaw)
 
 ```
-conversationKey = ${kakaoChannelId}:${plusfriendUserKey}
+1. 카카오 → POST /kakao-talkchannel/webhook
+   ├─ 서명 검증 (HMAC-SHA256, 선택)
+   ├─ conversationKey 생성: ${channelId}:${plusfriendUserKey}
+   ├─ conversation_mappings 조회/업데이트
+   └─ 명령어 파싱 (/pair, /unpair, /status, /help)
+
+2. 페어링된 사용자 → 메시지 큐잉
+   ├─ inbound_messages INSERT (status: queued)
+   ├─ SSE 브로커로 발행 (Redis Pub/Sub)
+   └─ 카카오에 즉시 응답: { "version": "2.0", "useCallback": true }
+
+3. OpenClaw ← SSE /v1/events
+   ├─ 연결 시 대기 메시지 즉시 전달 (queued → delivered)
+   ├─ 새 메시지 실시간 수신
+   └─ 30초 하트비트로 연결 유지
 ```
 
-- `kakaoChannelId`: 공유 카카오 채널 ID
-- `plusfriendUserKey`: 카카오 사용자 고유 ID (봇 간 안정적)
+### 아웃바운드 (OpenClaw → 카카오)
 
-### 2. Account
-
-OpenClaw 인스턴스(봇 오너)를 나타냄:
-
-```typescript
-interface Account {
-  id: string;
-  openclawUserId: string;     // OpenClaw 사용자 식별자
-  relayTokenHash: string;     // 인증 토큰 해시
-  rateLimitPerMinute: number; // 분당 요청 한도
-  createdAt: Date;
-  disabledAt?: Date;
-}
 ```
+1. OpenClaw → POST /openclaw/reply
+   ├─ 토큰 인증 → accountId 확인
+   ├─ messageId로 인바운드 메시지 조회
+   ├─ 테넌트 격리 검증 (message.accountId == requester.accountId)
+   └─ 콜백 URL 만료 확인
 
-### 3. Conversation Mapping
-
-카카오 사용자 ↔ OpenClaw 인스턴스 매핑:
-
-```typescript
-interface ConversationMapping {
-  conversationKey: string;    // PK
-  accountId?: string;         // FK to Account (null if unpaired)
-  state: 'UNPAIRED' | 'PENDING' | 'PAIRED' | 'BLOCKED';
-  pairedAt?: Date;
-}
+2. 카카오 콜백 전송
+   ├─ URL 검증: HTTPS + 카카오 도메인만 허용
+   ├─ POST callbackUrl (5초 타임아웃)
+   ├─ 성공 → outbound_messages status: sent
+   └─ 실패 → outbound_messages status: failed + error_message
 ```
 
 ---
 
-## Message Flow
+## 세션 기반 페어링
 
-### Inbound (카카오톡 채널 → OpenClaw)
+기존 `pairing_codes` 테이블 기반에서 `sessions` 테이블 기반으로 변경되었습니다.
 
-```
-1. Kakao webhook 수신
-   POST /kakao-talkchannel/webhook
-   Body: { userRequest: { user: { properties: { plusfriendUserKey } }, utterance } }
-
-2. conversationKey 생성
-   conversationKey = `${channelId}:${plusfriendUserKey}`
-
-3. 라우팅 결정
-   mapping = SELECT * FROM mappings WHERE conversation_key = ?
-   
-   IF mapping.state == 'PAIRED':
-     → 메시지 큐에 추가 (accountId = mapping.accountId)
-   ELSE IF mapping.state == 'UNPAIRED':
-     → 페어링 안내 응답
-   ELSE IF mapping.state == 'PENDING':
-     → 페어링 대기 중 응답
-
-4. 즉시 ACK 반환
-   { "version": "2.0", "useCallback": true }
-
-5. OpenClaw 폴링
-   GET /openclaw/messages (Authorization: Bearer <token>)
-   → accountId에 해당하는 메시지만 반환
-```
-
-### Outbound (OpenClaw → 카카오톡 채널)
+### 흐름
 
 ```
-1. OpenClaw 응답 전송
-   POST /openclaw/reply
-   Body: { messageId, conversationKey, response }
+1. 대시보드 또는 API에서 세션 생성
+   POST /v1/sessions/create
+   └─ 발급: sessionToken (64자 hex) + pairingCode (XXXX-XXXX)
+   └─ 유효기간: 5분
 
-2. 권한 검증
-   - relayToken → accountId
-   - message.accountId == accountId?
+2. OpenClaw가 SSE 연결 (세션 토큰으로)
+   GET /v1/events?token=<sessionToken>
+   └─ status: pending_pairing 상태로 대기
 
-3. 카카오 콜백 호출
-   POST callbackUrl
-   Body: KakaoSkillResponse
+3. 카카오 사용자가 "/pair ABCD-1234" 입력
+   └─ 웹훅에서 pairingCode 매칭
+   └─ 트랜잭션:
+      ├─ Account 생성 (relay_token_hash)
+      ├─ Session 업데이트 (status: paired, account_id)
+      └─ ConversationMapping 업데이트 (state: paired, account_id)
 
-4. 메시지 상태 업데이트
-   UPDATE messages SET status = 'ACKED' WHERE id = ?
+4. SSE로 pairing_complete 이벤트 전달
+   └─ OpenClaw가 relayToken 수신, 이후 인증에 사용
 ```
+
+### 페어링 코드 보안
+
+- **문자셋**: `ABCDEFGHJKLMNPQRSTUVWXYZ23456789` (혼동 문자 I, L, O, 0, 1 제외)
+- **엔트로피**: 32^8 ≈ 1.1조 조합
+- **TTL**: 5분
+- **일회용**: 사용 후 세션이 paired로 전환
+- **Rate Limit**: IP당 10회/5분
+
+### 사용자 명령어
+
+카카오 채팅에서 사용 가능:
+
+| 명령어 | 설명 |
+|--------|------|
+| `/pair <코드>` | OpenClaw에 연결 |
+| `/unpair` | 연결 해제 |
+| `/status` | 현재 연결 상태 확인 |
+| `/help` | 도움말 |
 
 ---
 
-## Database Schema
+## 데이터베이스 스키마
 
-### Tables
+서버 시작 시 `internal/database/schema.sql`이 자동 실행됩니다 (`CREATE TABLE IF NOT EXISTS`).
 
-```sql
--- 계정 (OpenClaw 인스턴스)
-CREATE TABLE accounts (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  openclaw_user_id TEXT NOT NULL UNIQUE,
-  relay_token_hash TEXT NOT NULL,
-  rate_limit_per_minute INT DEFAULT 60,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  disabled_at TIMESTAMPTZ
-);
+### accounts
 
--- 대화 매핑 (사용자 ↔ 계정)
-CREATE TABLE conversation_mappings (
-  conversation_key TEXT PRIMARY KEY,
-  kakao_channel_id TEXT NOT NULL,
-  plusfriend_user_key TEXT NOT NULL,
-  account_id UUID REFERENCES accounts(id),
-  state TEXT NOT NULL DEFAULT 'UNPAIRED',
-  last_callback_url TEXT,
-  last_callback_url_expires_at TIMESTAMPTZ,
-  first_seen_at TIMESTAMPTZ DEFAULT NOW(),
-  last_seen_at TIMESTAMPTZ DEFAULT NOW(),
-  paired_at TIMESTAMPTZ,
-  UNIQUE (kakao_channel_id, plusfriend_user_key)
-);
+OpenClaw 인스턴스(봇 오너)를 나타냄.
 
--- 인바운드 메시지 큐
-CREATE TABLE inbound_messages (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  account_id UUID NOT NULL REFERENCES accounts(id),
-  conversation_key TEXT NOT NULL,
-  kakao_payload JSONB NOT NULL,
-  normalized JSONB NOT NULL,
-  callback_url TEXT NOT NULL,
-  callback_expires_at TIMESTAMPTZ NOT NULL,
-  status TEXT NOT NULL DEFAULT 'QUEUED',
-  source_event_id TEXT,
-  created_at TIMESTAMPTZ DEFAULT NOW(),
-  delivered_at TIMESTAMPTZ,
-  acked_at TIMESTAMPTZ,
-  UNIQUE (source_event_id)
-);
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| relay_token_hash | text | SHA256 해시 (평문 미저장) |
+| rate_limit_per_minute | int (기본 60) | 분당 요청 한도 |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
--- 페어링 코드
-CREATE TABLE pairing_codes (
-  code TEXT PRIMARY KEY,
-  account_id UUID NOT NULL REFERENCES accounts(id),
-  expires_at TIMESTAMPTZ NOT NULL,
-  used_at TIMESTAMPTZ,
-  used_by TEXT,
-  metadata JSONB,
-  created_at TIMESTAMPTZ DEFAULT NOW()
-);
+### inbound_messages
 
--- 인덱스
-CREATE INDEX idx_messages_account_status ON inbound_messages(account_id, status);
-CREATE INDEX idx_messages_expires ON inbound_messages(callback_expires_at);
-CREATE INDEX idx_mappings_account ON conversation_mappings(account_id);
-CREATE INDEX idx_pairing_expires ON pairing_codes(expires_at);
-```
+카카오 → OpenClaw 메시지 큐.
 
----
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| account_id | uuid FK | accounts(id) CASCADE |
+| conversation_key | text | `${channelId}:${userKey}` |
+| kakao_payload | jsonb | 카카오 원본 페이로드 |
+| normalized_message | jsonb | `{ userId, text, channelId }` |
+| callback_url | text | 카카오 콜백 URL |
+| callback_expires_at | timestamptz | 카카오 제한: 60초 |
+| status | enum | queued → delivered → acked / expired |
+| source_event_id | text UNIQUE | 멱등성 키 |
+| created_at | timestamptz | |
+| delivered_at | timestamptz | |
+| acked_at | timestamptz | |
 
-## Long Polling
+### outbound_messages
 
-효율적인 메시지 폴링을 위한 Long Polling 구현:
+OpenClaw → 카카오 응답 기록.
 
-```typescript
-async function pollMessages(accountId: string, wait: number, limit: number) {
-  const deadline = Date.now() + wait;
-  
-  while (Date.now() < deadline) {
-    const messages = await db.query(`
-      SELECT * FROM inbound_messages 
-      WHERE account_id = $1 AND status = 'QUEUED'
-      ORDER BY created_at ASC
-      LIMIT $2
-      FOR UPDATE SKIP LOCKED
-    `, [accountId, limit]);
-    
-    if (messages.length > 0) {
-      // Mark as delivered
-      await db.query(`
-        UPDATE inbound_messages 
-        SET status = 'DELIVERED', delivered_at = NOW()
-        WHERE id = ANY($1)
-      `, [messages.map(m => m.id)]);
-      
-      return messages;
-    }
-    
-    // Wait before retry
-    await sleep(Math.min(1000, deadline - Date.now()));
-  }
-  
-  return [];
-}
-```
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| account_id | uuid FK | accounts(id) CASCADE |
+| inbound_message_id | uuid FK | inbound_messages(id) SET NULL |
+| conversation_key | text | |
+| kakao_target | jsonb | |
+| response_payload | jsonb | 카카오 응답 포맷 |
+| status | enum | pending → sent / failed |
+| error_message | text | 실패 시 에러 메시지 |
+| created_at | timestamptz | |
+| sent_at | timestamptz | |
+
+### conversation_mappings
+
+카카오 사용자 ↔ 계정 매핑.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| conversation_key | text UNIQUE | `${channelId}:${userKey}` |
+| kakao_channel_id | text | |
+| plusfriend_user_key | text | |
+| account_id | uuid FK | accounts(id) SET NULL |
+| state | enum | unpaired / pending / paired / blocked |
+| last_callback_url | text | 최근 웹훅의 콜백 URL |
+| last_callback_expires_at | timestamptz | |
+| first_seen_at | timestamptz | |
+| last_seen_at | timestamptz | |
+| paired_at | timestamptz | |
+
+### sessions
+
+페어링 세션.
+
+| 컬럼 | 타입 | 설명 |
+|------|------|------|
+| id | uuid PK | |
+| session_token_hash | text UNIQUE | SHA256 해시 |
+| pairing_code | text UNIQUE | `XXXX-XXXX` 형식 |
+| status | enum | pending_pairing / paired / expired / disconnected |
+| account_id | uuid FK | 페어링 완료 시 설정 |
+| paired_conversation_key | text | |
+| metadata | jsonb | relay token 등 |
+| expires_at | timestamptz | 기본 5분 |
+| paired_at | timestamptz | |
+| created_at | timestamptz | |
+| updated_at | timestamptz | |
 
 ---
 
-## Idempotency
+## 미들웨어
 
-웹훅 재시도와 폴링 경쟁으로 인한 중복 처리 방지:
-
-### Source Event ID
-
-```typescript
-// 카카오 페이로드에서 고유 ID 추출 또는 생성
-function getSourceEventId(payload: KakaoSkillPayload): string {
-  // 카카오가 제공하는 경우
-  if (payload.userRequest.eventId) {
-    return payload.userRequest.eventId;
-  }
-  
-  // 없으면 해시 생성
-  const content = JSON.stringify({
-    channelId: payload.bot.id,
-    userId: payload.userRequest.user.id,
-    utterance: payload.userRequest.utterance,
-    timestamp: payload.userRequest.timestamp,
-  });
-  
-  return crypto.createHash('sha256').update(content).digest('hex');
-}
-```
-
-### Upsert with Conflict
-
-```sql
-INSERT INTO inbound_messages (source_event_id, ...)
-VALUES ($1, ...)
-ON CONFLICT (source_event_id) DO NOTHING
-RETURNING id;
-```
+| 미들웨어 | 적용 범위 | 설명 |
+|---------|----------|------|
+| RequestID, RealIP | 전체 | Chi 내장 |
+| RequestLogger | 전체 | Zerolog 구조화 로깅 |
+| Recoverer | 전체 | 패닉 복구 |
+| Timeout (60초) | 전체 | 요청 타임아웃 |
+| BodyLimit | 전체 | 요청 본문 크기 제한 |
+| KakaoSignature | `/kakao-talkchannel/*` | HMAC-SHA256 서명 검증 |
+| Auth | `/v1/*`, `/openclaw/*` | Bearer 토큰 → 계정/세션 인증 |
+| RateLimit (계정) | `/v1/*`, `/openclaw/*` | 인메모리, 분당 한도 |
+| IPRateLimit (Redis) | `/v1/sessions/*` | Redis Sorted Set, 슬라이딩 윈도우 |
 
 ---
 
-## TTL & Cleanup
+## 백그라운드 작업
 
-### Message TTL
+### CleanupJob (5분 간격)
 
-- **콜백 URL 만료**: 1분 (카카오 제한)
-- **메시지 큐 TTL**: 15분 (설정 가능)
-- **페어링 코드 TTL**: 10분 (기본)
-
-### Background Job
-
-```typescript
-// 매 분 실행
-async function cleanupExpiredMessages() {
-  // 만료된 메시지 상태 변경
-  await db.query(`
-    UPDATE inbound_messages 
-    SET status = 'EXPIRED'
-    WHERE status IN ('QUEUED', 'DELIVERED')
-      AND callback_expires_at < NOW()
-  `);
-  
-  // 오래된 메시지 삭제 (7일)
-  await db.query(`
-    DELETE FROM inbound_messages 
-    WHERE created_at < NOW() - INTERVAL '7 days'
-  `);
-  
-  // 만료된 페어링 코드 삭제
-  await db.query(`
-    DELETE FROM pairing_codes 
-    WHERE expires_at < NOW() AND used_at IS NULL
-  `);
-}
-```
+1. **만료 메시지 처리**: `callback_expires_at < NOW()` → status: expired
+2. **오래된 메시지 삭제**: `created_at < NOW() - 7일` → 하드 삭제
+3. **만료 세션 삭제**: `expires_at < NOW()` → 삭제
 
 ---
 
-## Security Considerations
+## 보안
 
-### 1. Tenant Isolation
+### 토큰 관리
+- SHA256 해시만 DB 저장. 평문은 생성 시 1회만 노출
+- `util.GenerateToken()`: 32바이트 랜덤 → hex 인코딩 (64자)
+- 재발급 시 기존 해시 즉시 교체
 
-- 모든 쿼리에 `account_id` 필터 필수
-- 토큰 검증 실패 시 즉시 거부
-- 다른 계정 데이터 접근 불가
+### 서명 검증
+- `X-Kakao-Signature` 헤더로 HMAC-SHA256 검증
+- `crypto/subtle.ConstantTimeCompare`로 타이밍 공격 방지
+- `KAKAO_SIGNATURE_SECRET` 미설정 시 경고 로그 후 통과
 
-### 2. Rate Limiting
+### 콜백 URL 검증
+- HTTPS 프로토콜 필수
+- 허용 도메인: `*.kakao.com`, `*.kakaocdn.net`, `*.kakaoenterprise.com`
+- 5초 타임아웃
 
-계정별 분당 요청 한도:
-
-```typescript
-const rateLimiter = new RateLimiter({
-  keyPrefix: 'ratelimit:',
-  points: account.rateLimitPerMinute,
-  duration: 60,
-});
-
-await rateLimiter.consume(account.id);
-```
-
-### 3. Token Security
-
-- 원본 토큰 저장 안 함 (해시만)
-- 토큰 생성 시 즉시 표시 후 폐기
-- 토큰 재발급 가능 (기존 토큰 무효화)
-
-### 4. Pairing Security
-
-- 코드 단기 유효 (10분)
-- 일회용 (사용 후 무효화)
-- 계정당 활성 코드 제한 (5개)
-- 실패 시도 Rate Limiting
+### 테넌트 격리
+- 모든 핸들러에서 `accountId` 기반 접근 제어
+- 다른 계정의 메시지 접근 시 403 Forbidden
 
 ---
 
-## Monitoring
+## SSE 브로커
 
-### Key Metrics
+Redis Pub/Sub 기반의 실시간 이벤트 분배.
 
-| Metric | Description |
-|--------|-------------|
-| `relay.webhook.received` | 수신 웹훅 수 |
-| `relay.message.queued` | 큐에 추가된 메시지 |
-| `relay.message.delivered` | 전달된 메시지 |
-| `relay.message.expired` | 만료된 메시지 |
-| `relay.callback.sent` | 카카오 콜백 전송 |
-| `relay.callback.failed` | 콜백 실패 |
-| `relay.pairing.created` | 생성된 페어링 |
-| `relay.pairing.verified` | 완료된 페어링 |
-
-### Health Indicators
-
-```typescript
-async function healthCheck() {
-  return {
-    database: await checkDatabase(),
-    queueDepth: await getQueueDepth(),
-    oldestUndelivered: await getOldestUndeliveredAge(),
-    activeAccounts: await countActiveAccounts(),
-  };
-}
-```
+- **채널 단위**: accountId 또는 `session:{sessionId}`
+- **구독**: SSE 클라이언트 연결 시 Redis 채널 구독
+- **발행**: 웹훅 수신/페어링 완료 시 Redis로 발행
+- **하트비트**: 30초 간격 `: ping\n\n` 전송
+- **클라이언트 관리**: 연결/해제 시 자동 구독/구독해제
