@@ -1,7 +1,9 @@
+name: kakao-relay
+
 services:
   postgres:
     image: postgres:16-alpine
-    container_name: talkchannel-relay-postgres
+    container_name: kakao-relay-postgres
     restart: unless-stopped
     ports:
       - '5433:5432'
@@ -20,7 +22,7 @@ services:
 
   redis:
     image: redis:7-alpine
-    container_name: talkchannel-relay-redis
+    container_name: kakao-relay-redis
     restart: unless-stopped
     ports:
       - '6379:6379'
@@ -37,7 +39,7 @@ services:
     build:
       context: .
       dockerfile: Dockerfile
-    container_name: talkchannel-relay-app
+    container_name: kakao-relay-app
     restart: unless-stopped
     ports:
       - '8080:8080'
