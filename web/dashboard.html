@@ -151,6 +151,15 @@ tr:hover td{background:var(--bg-tertiary)}
 .toast.show{transform:translateY(0);opacity:1}
 .toast.error{border-left:3px solid var(--accent-red)}
 
+/* Pending session card */
+.pending-card{background:var(--bg-secondary);border:1px solid var(--accent-cyan);border-radius:var(--radius);padding:24px;margin-bottom:12px;display:flex;align-items:center;justify-content:space-between;gap:16px;box-shadow:0 0 12px rgba(6,182,212,.1)}
+.pending-card-main{flex:1}
+.pending-code{font-size:36px;font-weight:700;letter-spacing:6px;font-variant-numeric:tabular-nums;color:var(--accent-cyan);font-family:'Inter',monospace}
+.pending-instruction{font-size:13px;color:var(--text-secondary);margin-top:8px}
+.pending-instruction code{background:var(--bg-tertiary);padding:2px 8px;border-radius:4px;font-size:13px;color:var(--accent-cyan)}
+.pending-timer{font-size:12px;color:var(--accent-yellow);margin-top:6px}
+.pending-timer.expired{color:var(--accent-red)}
+
 /* Responsive */
 .hamburger{display:none;background:none;border:none;color:var(--text-primary);padding:8px;cursor:pointer}
 @media(max-width:768px){
@@ -224,6 +233,7 @@ const API = '/dashboard/api';
 let currentView = 'overview';
 let refreshTimer = null;
 let pollingTimer = null;
+let pendingTimerInterval = null;
 let expandedAccount = null;
 
 // ── Navigation ──
@@ -234,6 +244,7 @@ function navigate(view) {
   });
   closeSidebar();
   stopRefresh();
+  stopPendingTimer();
   clearContent();
 
   const titles = { overview: 'Overview', sessions: 'Sessions', accounts: 'Accounts' };
@@ -322,8 +333,8 @@ async function renderOverview() {
 
 // ── Sessions ──
 async function renderSessions() {
-  document.getElementById('headerActions').innerHTML =
-    '<button class="btn btn-primary" onclick="createSession()">+ New Session</button>';
+  document.getElementById('headerActions').innerHTML = '';
+  stopPendingTimer();
 
   showLoading();
   const sessions = await fetchJSON(`${API}/sessions`);
@@ -331,113 +342,98 @@ async function renderSessions() {
 
   if (sessions.length === 0) {
     document.getElementById('viewContent').innerHTML =
-      '<div class="empty">No sessions yet. Create one to get started.</div>';
+      '<div class="empty">No sessions yet. Sessions are created automatically when OpenClaw connects.</div>';
     startRefresh(() => renderSessions(), 30000);
     return;
   }
 
-  document.getElementById('viewContent').innerHTML = `
-    <div class="table-wrap">
-      <table>
-        <thead><tr>
-          <th>Status</th><th>Pairing Code</th><th>Account</th><th>Created</th><th>Paired</th><th>Expires</th><th>Actions</th>
-        </tr></thead>
-        <tbody>
-          ${sessions.map(s => `<tr>
-            <td>${sessionBadge(s.status)}</td>
-            <td style="font-family:monospace;font-weight:600;letter-spacing:1px">${s.pairingCode}</td>
-            <td style="font-family:monospace;font-size:12px">${s.accountId || '—'}</td>
-            <td>${fmtDate(s.createdAt)}</td>
-            <td>${s.pairedAt ? fmtDate(s.pairedAt) : '—'}</td>
-            <td>${fmtDate(s.expiresAt)}</td>
-            <td>
-              <div class="action-group">
-                ${s.status === 'paired' ? `<button class="btn btn-sm btn-warning" onclick="disconnectSession('${s.id}',event)">Disconnect</button>` : ''}
-                <button class="btn btn-sm btn-danger" onclick="deleteSession('${s.id}',event)">Delete</button>
-              </div>
-            </td>
-          </tr>`).join('')}
-        </tbody>
-      </table>
-    </div>
-  `;
+  const now = new Date();
+  const pending = sessions.filter(s => s.status === 'pending_pairing' && new Date(s.expiresAt) > now);
+  const others = sessions.filter(s => !(s.status === 'pending_pairing' && new Date(s.expiresAt) > now));
 
+  let html = '';
+
+  // Pending pairing cards
+  if (pending.length > 0) {
+    html += '<div class="section"><div class="section-title">Pending Pairing</div>';
+    html += pending.map(s => {
+      const remaining = Math.max(0, Math.floor((new Date(s.expiresAt) - now) / 1000));
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      return `
+        <div class="pending-card">
+          <div class="pending-card-main">
+            <div class="pending-code">${s.pairingCode}</div>
+            <div class="pending-instruction">카카오톡에서 <code>/pair ${s.pairingCode}</code> 입력</div>
+            <div class="pending-timer" data-expires="${s.expiresAt}">만료까지 ${mins}:${String(secs).padStart(2,'0')}</div>
+          </div>
+          <div>
+            <button class="btn btn-sm btn-danger" onclick="deleteSession('${s.id}',event)">Delete</button>
+          </div>
+        </div>`;
+    }).join('');
+    html += '</div>';
+    startPendingTimer();
+  }
+
+  // Session history table
+  if (others.length > 0) {
+    html += `
+      <div class="section">
+        <div class="section-title">Session History</div>
+        <div class="table-wrap">
+          <table>
+            <thead><tr>
+              <th>Status</th><th>Pairing Code</th><th>Account</th><th>Created</th><th>Paired</th><th>Expires</th><th>Actions</th>
+            </tr></thead>
+            <tbody>
+              ${others.map(s => `<tr>
+                <td>${sessionBadge(s.status)}</td>
+                <td style="font-family:monospace;font-weight:600;letter-spacing:1px">${s.pairingCode}</td>
+                <td style="font-family:monospace;font-size:12px">${s.accountId || '—'}</td>
+                <td>${fmtDate(s.createdAt)}</td>
+                <td>${s.pairedAt ? fmtDate(s.pairedAt) : '—'}</td>
+                <td>${fmtDate(s.expiresAt)}</td>
+                <td>
+                  <div class="action-group">
+                    ${s.status === 'paired' ? `<button class="btn btn-sm btn-warning" onclick="disconnectSession('${s.id}',event)">Disconnect</button>` : ''}
+                    <button class="btn btn-sm btn-danger" onclick="deleteSession('${s.id}',event)">Delete</button>
+                  </div>
+                </td>
+              </tr>`).join('')}
+            </tbody>
+          </table>
+        </div>
+      </div>`;
+  }
+
+  html += '<div style="text-align:center;padding:16px;font-size:12px;color:var(--text-muted)">Sessions are created automatically by the OpenClaw plugin</div>';
+
+  document.getElementById('viewContent').innerHTML = html;
   startRefresh(() => renderSessions(), 30000);
 }
 
-async function createSession() {
-  const btn = document.querySelector('#headerActions .btn-primary');
-  if (btn) { btn.disabled = true; btn.textContent = 'Creating...'; }
-
-  const data = await fetchJSON(`${API}/sessions/create`, { method: 'POST' });
-  if (btn) { btn.disabled = false; btn.textContent = '+ New Session'; }
-  if (!data) return;
-
-  showModal(`
-    <h3>Pairing Code</h3>
-    <p style="color:var(--text-secondary);font-size:13px">Enter this code in KakaoTalk with <code>/pair CODE</code></p>
-    <div class="pairing-code">${data.pairingCode}</div>
-    <div class="status-line" id="pairingStatus">
-      <span class="spinner"></span>
-      <span>Waiting for pairing...</span>
-    </div>
-    <div style="font-size:12px;color:var(--text-muted)" id="pairingTimer">Expires in ${data.expiresIn}s</div>
-    <button class="close-btn" onclick="closeModal()">Close</button>
-  `);
-
-  startPairingPoll(data.sessionToken, data.expiresIn);
-}
-
-function startPairingPoll(token, expiresIn) {
-  stopPolling();
-  let remaining = expiresIn;
-
-  const countdownEl = document.getElementById('pairingTimer');
-  const statusEl = document.getElementById('pairingStatus');
-  const countdown = setInterval(() => {
-    remaining--;
-    if (countdownEl) countdownEl.textContent = `Expires in ${remaining}s`;
-    if (remaining <= 0) clearInterval(countdown);
-  }, 1000);
-
-  pollingTimer = setInterval(async () => {
-    try {
-      const res = await fetch(`/v1/sessions/${token}/status`);
-      const result = await res.json();
-
-      if (result.status === 'paired') {
-        stopPolling();
-        clearInterval(countdown);
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-green);font-weight:600">Paired successfully!</span>';
-        if (countdownEl) countdownEl.textContent = '';
-        if (result.relayToken) {
-          showPairedModal(result.relayToken, result.accountId);
-        } else {
-          showToast('Session paired successfully');
-          setTimeout(() => { closeModal(); renderSessions(); }, 1500);
-        }
-      } else if (result.status === 'expired') {
-        stopPolling();
-        clearInterval(countdown);
-        if (statusEl) statusEl.innerHTML = '<span style="color:var(--accent-red)">Session expired</span>';
-        if (countdownEl) countdownEl.textContent = '';
+function startPendingTimer() {
+  stopPendingTimer();
+  pendingTimerInterval = setInterval(() => {
+    const timers = document.querySelectorAll('.pending-timer[data-expires]');
+    if (timers.length === 0) { stopPendingTimer(); return; }
+    timers.forEach(el => {
+      const remaining = Math.max(0, Math.floor((new Date(el.dataset.expires) - new Date()) / 1000));
+      if (remaining <= 0) {
+        el.textContent = 'Expired';
+        el.classList.add('expired');
+        return;
       }
-    } catch (e) { /* ignore polling errors */ }
-  }, 2000);
+      const mins = Math.floor(remaining / 60);
+      const secs = remaining % 60;
+      el.textContent = `만료까지 ${mins}:${String(secs).padStart(2, '0')}`;
+    });
+  }, 1000);
 }
 
-function showPairedModal(relayToken, accountId) {
-  showModal(`
-    <h3 style="color:var(--accent-green)">Pairing Complete</h3>
-    <p style="color:var(--text-secondary);font-size:13px;margin-bottom:8px">Your relay token has been generated. Copy and save it now — it cannot be retrieved later.</p>
-    ${accountId ? `<p style="font-size:12px;color:var(--text-muted);margin-bottom:12px">Account: <code style="color:var(--accent-cyan)">${esc(accountId)}</code></p>` : ''}
-    <div class="relay-token-box" onclick="copyToken(this)" title="Click to copy">
-      <span class="copy-hint">click to copy</span>
-      ${esc(relayToken)}
-    </div>
-    <p style="font-size:11px;color:var(--accent-yellow);margin:8px 0 16px">This token is shown only once. Store it securely.</p>
-    <button class="close-btn" onclick="closeModal();renderSessions()">Done</button>
-  `);
+function stopPendingTimer() {
+  if (pendingTimerInterval) { clearInterval(pendingTimerInterval); pendingTimerInterval = null; }
 }
 
 function copyToken(el) {
@@ -477,7 +473,7 @@ async function renderAccounts() {
 
   if (accounts.length === 0) {
     document.getElementById('viewContent').innerHTML =
-      '<div class="empty">No accounts. Create a session and pair it first.</div>';
+      '<div class="empty">No accounts yet. Accounts are created automatically when a session is paired.</div>';
     startRefresh(() => renderAccounts(), 30000);
     return;
   }
