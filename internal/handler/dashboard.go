@@ -8,6 +8,7 @@ import (
 	"github.com/go-chi/chi/v5"
 	"github.com/rs/zerolog/log"
 
+	"gitlab.tepseg.com/ai/kakao-relay/internal/model"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/repository"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/service"
 	"gitlab.tepseg.com/ai/kakao-relay/internal/sse"
@@ -143,6 +144,9 @@ func (h *DashboardHandler) AccountMessages(w http.ResponseWriter, r *http.Reques
 			writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get messages"})
 			return
 		}
+		if msgs == nil {
+			msgs = []model.OutboundMessage{}
+		}
 		writeJSON(w, http.StatusOK, msgs)
 		return
 	}
@@ -152,6 +156,9 @@ func (h *DashboardHandler) AccountMessages(w http.ResponseWriter, r *http.Reques
 		log.Error().Err(err).Msg("dashboard: failed to get inbound messages")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get messages"})
 		return
+	}
+	if msgs == nil {
+		msgs = []model.InboundMessage{}
 	}
 	writeJSON(w, http.StatusOK, msgs)
 }
@@ -195,6 +202,9 @@ func (h *DashboardHandler) AccountFailedMessages(w http.ResponseWriter, r *http.
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to get messages"})
 		return
 	}
+	if msgs == nil {
+		msgs = []model.OutboundMessage{}
+	}
 
 	writeJSON(w, http.StatusOK, msgs)
 }
@@ -214,6 +224,9 @@ func (h *DashboardHandler) ListSessions(w http.ResponseWriter, r *http.Request) 
 		log.Error().Err(err).Msg("dashboard: failed to list sessions")
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "Failed to list sessions"})
 		return
+	}
+	if sessions == nil {
+		sessions = []model.Session{}
 	}
 
 	writeJSON(w, http.StatusOK, sessions)
